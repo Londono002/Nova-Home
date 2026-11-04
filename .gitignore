@@ -1,3 +1,9 @@
 Thumbs.db
 desktop.ini
 .DS_Store
+switch/NovaHome/*.nro
+switch/NovaHome/*.elf
+switch/NovaHome/*.nacp
+switch/NovaHome/*.map
+switch/NovaHome/*.lst
+switch/NovaHome/build/

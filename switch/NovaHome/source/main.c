@@ -2,6 +2,7 @@
 #include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
 #include <SDL_image.h>
+#include "nova_music.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,20 +29,22 @@ typedef struct {
 } Game;
 
 typedef enum { SORT_AZ, SORT_PLAYTIME, SORT_RECENT } SortMode;
-typedef enum { FOCUS_LIBRARY, FOCUS_TOP, FOCUS_ACTIONS } FocusArea;
+typedef enum { FOCUS_LIBRARY, FOCUS_TOP, FOCUS_SORT, FOCUS_ACTIONS } FocusArea;
 static Game games[GAME_CAP];
 static int game_count=0, selected=0, sort_mode=SORT_AZ;
 static int focus_area=FOCUS_LIBRARY, focus_top=0, focus_action=0;
 static int options_open=0, option_cursor=0, panel_open=-1, show_start_until=0;
 static int frame_tick=0;
+static int stick_repeat=0;
 static char profile_name[48]="Perfil";
 static char clock_text[8]="--:--";
 static char battery_text[8]="--%";
 static int battery_level=-1;
-static SDL_Texture *nova_logo=NULL, *profile_icon=NULL;
+static SDL_Texture *profile_icon=NULL;
 static NsApplicationControlData *control_data=NULL;
 static SDL_Renderer *app_renderer=NULL;
 static bool has_time_service=false,has_battery_service=false,playtime_available=false;
+static NovaMusic *menu_music=NULL;
 
 static void set_color(SDL_Renderer *r,SDL_Color c){SDL_SetRenderDrawColor(r,c.r,c.g,c.b,c.a);}
 static void fill(SDL_Renderer *r,int x,int y,int w,int h,SDL_Color c){set_color(r,c);SDL_Rect q={x,y,w,h};SDL_RenderFillRect(r,&q);}
@@ -113,8 +116,9 @@ static void update_visible_icons(SDL_Renderer *r){
     if(!game_count||R_FAILED(nsInitialize()))return;
     if(!control_data)control_data=malloc(sizeof(*control_data));
     if(!control_data){nsExit();return;}
-    for(int i=0;i<game_count;i++){int off=i-selected;if(off>game_count/2)off-=game_count;if(off<-(game_count/2))off+=game_count;if(abs(off)>3&&games[i].icon){SDL_DestroyTexture(games[i].icon);games[i].icon=NULL;games[i].icon_loaded=false;}}
-    for(int off=-3;off<=3;off++){int i=(selected+off+game_count)%game_count;Game *g=&games[i];if(g->icon_loaded)continue;g->icon_loaded=true;
+    for(int i=0;i<game_count;i++){int off=i-selected;if(abs(off)>3&&games[i].icon){SDL_DestroyTexture(games[i].icon);games[i].icon=NULL;games[i].icon_loaded=false;}}
+    int first=selected-3;if(first<0)first=0;int last=selected+3;if(last>=game_count)last=game_count-1;
+    for(int i=first;i<=last;i++){Game *g=&games[i];if(g->icon_loaded)continue;g->icon_loaded=true;
         memset(control_data,0,sizeof(*control_data));u64 actual=0;if(R_SUCCEEDED(nsGetApplicationControlData(NsApplicationControlSource_Storage,g->id,control_data,sizeof(*control_data),&actual))&&actual>=sizeof(control_data->nacp)){
             size_t size=(size_t)(actual-sizeof(control_data->nacp));if(size>sizeof(control_data->icon))size=sizeof(control_data->icon);g->icon=load_jpeg_texture(r,control_data->icon,(int)size);
         }
@@ -159,7 +163,6 @@ static void draw_header(SDL_Renderer *r){
     char name[32];ascii_text(profile_name,name,sizeof(name));txt(r,74,35,name,(SDL_Color){255,255,255,250});txt(r,74,48,"PERFIL",(SDL_Color){165,168,183,255});
     txt(r,211,39,clock_text,(SDL_Color){255,255,255,255});
     round_box(r,267,35,25,13,4,(SDL_Color){205,207,216,255});fill(r,270,38,battery_level<0?2:20*battery_level/100,7,(SDL_Color){147,131,238,255});txt(r,297,38,battery_text,(SDL_Color){236,236,243,255});
-    if(nova_logo){SDL_Rect logo={410,10,135,55};SDL_RenderCopy(r,nova_logo,NULL,&logo);}
     round_box(r,1004,18,252,46,10,(SDL_Color){12,14,21,195});
     for(int i=0;i<4;i++){
         int x=1011+i*60;round_box(r,x,25,51,32,7,(focus_area==FOCUS_TOP&&focus_top==i+1)?(SDL_Color){117,94,204,210}:(SDL_Color){255,255,255,15});
@@ -172,11 +175,11 @@ static void draw_header(SDL_Renderer *r){
 
 static void draw_screen(SDL_Renderer *r,float anim,int tick){
     const Game *g=game_count?&games[selected]:(Game*)0;draw_gradient(r,g);draw_header(r);
-    const char *sort_names[]={"A-Z","MAS JUGADO","RECIENTE"};round_box(r,26,78,166,28,7,(SDL_Color){12,14,21,180});txt(r,37,89,"ORDEN",(SDL_Color){188,178,255,255});txt(r,78,89,sort_names[sort_mode],(SDL_Color){255,255,255,255});
+    const char *sort_names[]={"A-Z","MAS JUGADO","RECIENTE"};round_box(r,26,78,166,28,7,(focus_area==FOCUS_SORT)?(SDL_Color){117,94,204,230}:(SDL_Color){12,14,21,180});txt(r,37,89,"ORDEN",(SDL_Color){188,178,255,255});txt(r,78,89,sort_names[sort_mode],(SDL_Color){255,255,255,255});
     int selected_w=(int)(SMALL_W+(BIG_W-SMALL_W)*anim),selected_h=(int)(SMALL_H+(BIG_H-SMALL_H)*anim);
     if(game_count){
         for(int i=0;i<game_count;i++){
-            int off=i-selected;if(off>game_count/2)off-=game_count;if(off<-(game_count/2))off+=game_count;if(abs(off)>3)continue;
+            int off=i-selected;if(abs(off)>3)continue;
             int w=off==0?selected_w:SMALL_W,h=off==0?selected_h:SMALL_H;int cx=card_center(off,selected_w);int y=158+(BIG_H-h)/2;
             draw_card(r,&games[i],cx,y,w,h,off==0,i);
         }
@@ -189,11 +192,12 @@ static void draw_screen(SDL_Renderer *r,float anim,int tick){
     txt(r,406,632,"ARRIBA / ABAJO  MENU       IZQ. / DER.  NAVEGAR       A  ELEGIR       -  SALIR",(SDL_Color){204,204,216,220});
     if(show_start_until>tick){round_box(r,420,580,440,34,8,(SDL_Color){13,15,23,230});txt(r,437,592,"No se pudo iniciar el juego seleccionado.",(SDL_Color){255,255,255,255});}
     if(options_open){round_box(r,370,195,540,330,16,(SDL_Color){14,16,24,248});txt(r,405,225,"NOVA  /  OPCIONES",(SDL_Color){194,179,255,255});const char *opts[]={"Iniciar el juego seleccionado","Ordenar: A-Z","Ordenar: mas jugados","Ordenar: recientes"};for(int i=0;i<4;i++){char row[96];snprintf(row,sizeof(row),"%c %s",i==option_cursor?'>':' ',opts[i]);txt(r,405,265+i*34,row,i==option_cursor?(SDL_Color){255,255,255,255}:(SDL_Color){225,225,235,255});}txt(r,405,410,"A   Elegir       B   Cerrar",(SDL_Color){194,179,255,255});}
-    if(panel_open>=0){const char *names[]={"CONTROLES","AJUSTES","MUSICA","ALBUM / HOMEBREW","PERFIL"};round_box(r,400,215,480,270,16,(SDL_Color){14,16,24,248});txt(r,440,250,names[panel_open],(SDL_Color){194,179,255,255});txt(r,440,292,panel_open==4?profile_name:"Este panel se conectara en una proxima etapa.",(SDL_Color){255,255,255,255});txt(r,440,390,"A / B  Cerrar",(SDL_Color){194,179,255,255});}
+    if(panel_open>=0){const char *names[]={"CONTROLES","AJUSTES","MUSICA","ALBUM / HOMEBREW","PERFIL"};SDL_Rect panel={400,215,480,270};if(panel_open==2)nova_music_draw_panel(menu_music,r,panel);else{round_box(r,panel.x,panel.y,panel.w,panel.h,16,(SDL_Color){14,16,24,248});txt(r,440,250,names[panel_open],(SDL_Color){194,179,255,255});txt(r,440,292,panel_open==4?profile_name:"Este panel se conectara en una proxima etapa.",(SDL_Color){255,255,255,255});txt(r,440,390,"A / B  Cerrar",(SDL_Color){194,179,255,255});}}
 }
 
 static void activate_header(void){if(focus_top==0)panel_open=4;else panel_open=focus_top-1;}
-static void launch_selected(void){if(game_count&&R_FAILED(appletRequestLaunchApplication(games[selected].id,NULL)))show_start_until=frame_tick+180;}
+static void launch_selected(void){if(!game_count)return;nova_music_set_active(menu_music,false);if(R_FAILED(appletRequestLaunchApplication(games[selected].id,NULL))){show_start_until=frame_tick+180;nova_music_set_active(menu_music,true);}}
+static void activate_sort_option(void){options_open=0;sort_library(option_cursor==1?SORT_AZ:option_cursor==2?SORT_PLAYTIME:SORT_RECENT);}
 
 int main(int argc,char *argv[]){
     (void)argc;(void)argv;
@@ -203,39 +207,66 @@ int main(int argc,char *argv[]){
     SDL_Renderer *renderer=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!renderer){SDL_DestroyWindow(window);IMG_Quit();SDL_Quit();return 1;}
     SDL_RenderSetLogicalSize(renderer,SCREEN_W,SCREEN_H);SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);app_renderer=renderer;
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);hidInitializeTouchScreen();
-    romfsInit();SDL_Surface *logo_surface=IMG_Load("romfs:/nova-logo.png");if(logo_surface){nova_logo=SDL_CreateTextureFromSurface(renderer,logo_surface);SDL_FreeSurface(logo_surface);}
+    romfsInit();menu_music=nova_music_create();
     has_time_service=R_SUCCEEDED(timeInitialize());has_battery_service=R_SUCCEEDED(psmInitialize());load_profile();load_library();sort_library(SORT_AZ);update_visible_icons(renderer);update_system_status();
     int tick=0,done=0,touching=0;float anim=0.0f;
     while(appletMainLoop()&&!done){
-        frame_tick=tick;int selection_changed=0;padUpdate(&pad);u64 down=padGetButtonsDown(&pad);if(down&HidNpadButton_Plus){options_open=!options_open;option_cursor=0;if(options_open)panel_open=-1;}if(down&HidNpadButton_Minus)done=1;
-        if(!(options_open||panel_open>=0)&&(down&HidNpadButton_Left||down&HidNpadButton_Right)){
-            int dir=(down&HidNpadButton_Left)?-1:1;
-            if(focus_area==FOCUS_LIBRARY&&game_count){selected=(selected+dir+game_count)%game_count;anim=0.0f;selection_changed=1;}
-            else if(focus_area==FOCUS_TOP)focus_top=(focus_top+dir+5)%5;
-            else if(focus_area==FOCUS_ACTIONS)focus_action=(focus_action+dir+2)%2;
+        frame_tick=tick;int selection_changed=0;padUpdate(&pad);u64 down=padGetButtonsDown(&pad);if(down&HidNpadButton_Plus){if(panel_open>=0)panel_open=-1;else{options_open=!options_open;option_cursor=0;}}if(down&HidNpadButton_Minus)done=1;
+        int nav_left=(down&HidNpadButton_Left)!=0,nav_right=(down&HidNpadButton_Right)!=0;
+        int nav_up=(down&HidNpadButton_Up)!=0,nav_down=(down&HidNpadButton_Down)!=0;
+        HidAnalogStickState left_stick=padGetStickPos(&pad,0);
+        if(stick_repeat>0)stick_repeat--;
+        if(!(options_open||panel_open>=0)&&stick_repeat==0){
+            if(left_stick.x < -16000){nav_left=1;stick_repeat=11;}
+            else if(left_stick.x > 16000){nav_right=1;stick_repeat=11;}
+            else if(left_stick.y > 16000){nav_up=1;stick_repeat=11;}
+            else if(left_stick.y < -16000){nav_down=1;stick_repeat=11;}
         }
-        if(down&HidNpadButton_Up){if(options_open)option_cursor=(option_cursor+3)%4;else if(panel_open>=0)panel_open=-1;else focus_area=focus_area==FOCUS_ACTIONS?FOCUS_LIBRARY:FOCUS_TOP;}
-        if(down&HidNpadButton_Down){if(options_open)option_cursor=(option_cursor+1)%4;else if(panel_open>=0)panel_open=-1;else focus_area=focus_area==FOCUS_TOP?FOCUS_LIBRARY:FOCUS_ACTIONS;}
+        if(panel_open==2){if(nav_left)nova_music_previous(menu_music);if(nav_right)nova_music_next(menu_music);}
+        else if(!(options_open||panel_open>=0)&&(nav_left||nav_right)){
+            int dir=nav_left?-1:1;
+            if(focus_area==FOCUS_LIBRARY&&game_count){int next=selected+dir;if(next>=0&&next<game_count){selected=next;anim=0.0f;selection_changed=1;}}
+            else if(focus_area==FOCUS_TOP)focus_top=(focus_top+dir+5)%5;
+            else if(focus_area==FOCUS_SORT){sort_library((SortMode)((sort_mode+dir+3)%3));selection_changed=1;}
+            else if(focus_area==FOCUS_ACTIONS){int next=focus_action+dir;if(next>=0&&next<=1)focus_action=next;}
+        }
+        if(panel_open==2){if(nav_up)nova_music_adjust_volume(menu_music,5);if(nav_down)nova_music_adjust_volume(menu_music,-5);}
+        else if(nav_up){
+            if(options_open)option_cursor=(option_cursor+3)%4;
+            else if(panel_open>=0)panel_open=-1;
+            else if(focus_area==FOCUS_ACTIONS)focus_area=FOCUS_LIBRARY;
+            else if(focus_area==FOCUS_LIBRARY)focus_area=FOCUS_SORT;
+            else if(focus_area==FOCUS_SORT)focus_area=FOCUS_TOP;
+        }
+        if(nav_down&&panel_open!=2){
+            if(options_open)option_cursor=(option_cursor+1)%4;
+            else if(panel_open>=0)panel_open=-1;
+            else if(focus_area==FOCUS_TOP)focus_area=FOCUS_SORT;
+            else if(focus_area==FOCUS_SORT)focus_area=FOCUS_LIBRARY;
+            else if(focus_area==FOCUS_LIBRARY)focus_area=FOCUS_ACTIONS;
+        }
         if(down&HidNpadButton_B){options_open=0;panel_open=-1;}
         if(down&HidNpadButton_X){sort_library(SORT_AZ);selection_changed=1;}
         if(down&HidNpadButton_Y){sort_library(SORT_PLAYTIME);selection_changed=1;}
         if(down&HidNpadButton_R){sort_library(SORT_RECENT);selection_changed=1;}
-        if(down&HidNpadButton_A){if(panel_open>=0)panel_open=-1;else if(options_open){options_open=0;if(option_cursor==0)launch_selected();else{sort_library(option_cursor==1?SORT_AZ:option_cursor==2?SORT_PLAYTIME:SORT_RECENT);selection_changed=1;}}else if(focus_area==FOCUS_TOP)activate_header();else if(focus_area==FOCUS_ACTIONS&&focus_action==1){options_open=1;option_cursor=0;}else launch_selected();}
+        if(down&HidNpadButton_A){if(panel_open==2)nova_music_toggle_pause(menu_music);else if(panel_open>=0)panel_open=-1;else if(options_open){if(option_cursor==0){options_open=0;launch_selected();}else{activate_sort_option();selection_changed=1;}}else if(focus_area==FOCUS_TOP)activate_header();else if(focus_area==FOCUS_SORT){options_open=1;option_cursor=sort_mode+1;}else if(focus_area==FOCUS_ACTIONS&&focus_action==1){options_open=1;option_cursor=0;}else launch_selected();}
         HidTouchScreenState touch={0};if(hidGetTouchScreenStates(&touch,1)){
             if(touch.count>0&&!touching){touching=1;int x=touch.touches[0].x,y=touch.touches[0].y;
                 if(options_open){if(x>370&&x<910&&y>=250&&y<390){if(y<284){options_open=0;launch_selected();}else{int row=(y-284)/34+1;if(row>3)row=3;options_open=0;sort_library(row==1?SORT_AZ:row==2?SORT_PLAYTIME:SORT_RECENT);selection_changed=1;}}else options_open=0;}
+                else if(panel_open==2){SDL_Rect music_bounds={400,215,480,270};nova_music_handle_touch(menu_music,x,y,music_bounds);}
                 else if(panel_open>=0){panel_open=-1;}
                 else if(y<68&&x>990){focus_area=FOCUS_TOP;focus_top=1+(x-1008)/60;if(focus_top<1)focus_top=1;if(focus_top>4)focus_top=4;activate_header();}
                 else if(y<68&&x<340){focus_area=FOCUS_TOP;focus_top=0;activate_header();}
-                else if(y<115&&x<200){sort_library((SortMode)((sort_mode+1)%3));selection_changed=1;}
+                else if(y<115&&x<200){focus_area=FOCUS_SORT;sort_library((SortMode)((sort_mode+1)%3));selection_changed=1;}
                 else if(y>500&&x>820){focus_area=FOCUS_ACTIONS;focus_action=x>1000?1:0;if(focus_action){options_open=1;option_cursor=0;}else launch_selected();}
-                else if(y>140&&y<490){int chosen=-1;for(int i=0;i<game_count;i++){int off=i-selected;if(off>game_count/2)off-=game_count;if(off<-(game_count/2))off+=game_count;int w=off==0?(int)(SMALL_W+(BIG_W-SMALL_W)*anim):SMALL_W;int cx=card_center(off,w);if(x>=cx-w/2&&x<=cx+w/2){chosen=i;break;}}if(chosen>=0){if(chosen==selected)launch_selected();else{selected=chosen;anim=0.0f;selection_changed=1;}focus_area=FOCUS_LIBRARY;}}
+                else if(y>140&&y<490){int chosen=-1;for(int i=0;i<game_count;i++){int off=i-selected;if(abs(off)>3)continue;int w=off==0?(int)(SMALL_W+(BIG_W-SMALL_W)*anim):SMALL_W;int cx=card_center(off,w);if(x>=cx-w/2&&x<=cx+w/2){chosen=i;break;}}if(chosen>=0){if(chosen==selected)launch_selected();else{selected=chosen;anim=0.0f;selection_changed=1;}focus_area=FOCUS_LIBRARY;}}
             }else if(touch.count==0)touching=0;
         }
         if(selection_changed)update_visible_icons(renderer);
         if(game_count&&anim<1.0f){anim+=0.08f;if(anim>1.0f)anim=1.0f;}
         if(tick%60==0)update_system_status();
+        nova_music_update(menu_music);
         draw_screen(renderer,1.0f-(1.0f-anim)*(1.0f-anim),tick++);SDL_RenderPresent(renderer);SDL_Delay(16);
     }
-    free_game_textures();if(nova_logo)SDL_DestroyTexture(nova_logo);if(profile_icon)SDL_DestroyTexture(profile_icon);if(has_time_service)timeExit();if(has_battery_service)psmExit();romfsExit();SDL_DestroyRenderer(renderer);SDL_DestroyWindow(window);IMG_Quit();SDL_Quit();return 0;
+    nova_music_destroy(menu_music);free_game_textures();if(profile_icon)SDL_DestroyTexture(profile_icon);if(has_time_service)timeExit();if(has_battery_service)psmExit();romfsExit();SDL_DestroyRenderer(renderer);SDL_DestroyWindow(window);IMG_Quit();SDL_Quit();return 0;
 }

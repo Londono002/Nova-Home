@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "switch/**"
+      - "Songs/**"
       - ".github/workflows/build-switch.yml"
   pull_request:
     paths:
       - "switch/**"
+      - "Songs/**"
       - ".github/workflows/build-switch.yml"
   workflow_dispatch:
 
@@ -19,6 +21,8 @@ jobs:
       image: devkitpro/devkita64:20260219
     steps:
       - uses: actions/checkout@v4
+      - name: Install SDL2 mixer
+        run: dkp-pacman -S --needed --noconfirm switch-sdl2_mixer
       - name: Build NovaHome.nro
         run: make -C switch/NovaHome
       - name: Upload NRO

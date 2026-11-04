@@ -4,7 +4,7 @@ Prototipo visual para PC de una interfaz HOME inspirada en bibliotecas modernas 
 
 ## Ejecutar
 
-Abre `index.html` en un navegador moderno. Para cargar imágenes locales, el navegador necesita permitir almacenamiento local. La interfaz se adapta a la resolución disponible; 1280 × 720 y 1920 × 1080 son tamaños objetivo para las pantallas de Switch en modo portátil y TV.
+Instala Node.js 18 o posterior y ejecuta `node server.js` desde la carpeta del proyecto. Abre `http://127.0.0.1:8787` en el navegador. El servidor es necesario para el puente local de SteamGridDB, que evita el bloqueo CORS del navegador. La interfaz web se adapta a 1280 × 720 y 1920 × 1080.
 
 ## Controles
 
@@ -24,22 +24,24 @@ Sobre el fondo del juego, la pantalla HOME reúne Perfil, reloj y batería en un
 - `index.html`: estructura de la interfaz.
 - `styles.css`: tema, componentes, animaciones y adaptación de pantalla.
 - `app.js`: biblioteca de demostración, renderizado, navegación, diálogos, reproducción de música y persistencia de arte.
-- `switch/NovaHome`: app nativa SDL2/libnx, probada en una Switch con Atmosphère.
+- `switch/NovaHome`: app nativa SDL2/libnx para Atmosphère con biblioteca real, navegación con stick/D-pad, carrusel finito, música MP3 y el logo como icono de Homebrew.
+- `build-nro.ps1`: compila el NRO desde Windows sin fallar por espacios en la ruta.
+- `server.js`: servidor local estático y puente limitado para solicitudes a SteamGridDB.
 - `.github/workflows/build-switch.yml`: genera un artefacto `.nro` con devkitPro al actualizar el port nativo.
 
 ## Estado del port de Switch
 
-La versión actual ya compila como `NovaHome.nro` y se probó en una Switch con Atmosphère. Lee las aplicaciones instaladas y sus iconos, muestra el perfil, la hora, la batería y las estadísticas de juego cuando libnx permite acceder a esos servicios. Permite iniciar juegos y ordenar la biblioteca por A–Z, tiempo de juego o uso reciente. Las carátulas se muestran en cajas verticales con la seleccionada ampliada, y el logotipo de NOVA está incluido.
+El NRO compila localmente. La versión probada anteriormente en Switch ya leía las aplicaciones instaladas y sus iconos, consultaba el perfil, la hora, la batería y las estadísticas disponibles, e iniciaba juegos. Este avance añade navegación por stick, carrusel finito y música MP3 nativa; la última compilación debe probarse en consola. El logo de NOVA queda como icono de la aplicación en Homebrew y no se dibuja en la pantalla principal.
 
-El prototipo para PC reproduce archivos de `Songs/`, permite elegir canciones, pausar y ajustar el volumen. Esa reproducción aún no está integrada en el NRO. SteamGridDB tampoco está conectado al port nativo; por ahora, este usa los iconos oficiales incluidos en los datos de cada juego.
+En Switch, Música reproduce los MP3 de `Songs/`, permite elegir pista, pausar y cambiar el volumen. Al compilar, Makefile los copia a RomFS. En PC, Ajustes permite guardar una clave de SteamGridDB solo en el navegador, probarla, buscar el juego y elegir carátula, fondo o icono. La clave no se incluye en el repositorio. SteamGridDB está conectado al prototipo PC; el NRO sigue usando los iconos oficiales instalados.
+
+Para SteamGridDB, crea una cuenta y genera una API key en [las preferencias de SteamGridDB](https://www.steamgriddb.com/profile/preferences/api). Pégala en Ajustes dentro de NOVA. La conexión requiere ejecutar `server.js`; abrir `index.html` directamente no permite usar el puente por las restricciones de origen del navegador.
 
 ### Próximas mejoras
 
-- Añadir navegación con la palanca izquierda.
-- Revisar el recorrido con arriba/abajo para que el botón de ordenar y todos los controles puedan seleccionarse.
-- Hacer que el carrusel tenga principio y fin según el orden actual, en vez de volver al otro extremo.
-- Reproducir los MP3 de `Songs/` en el menú, con controles de canción y volumen.
-- Integrar SteamGridDB para buscar y cargar imágenes.
+- Completar la navegación de todos los menús y controles.
+- Guardar la preferencia de orden de la biblioteca entre sesiones.
+- Integrar SteamGridDB con el port nativo si la experiencia de consola lo requiere.
 - Completar los menús de controles, ajustes, música y Álbum/Homebrew.
 
 ## Alcance de activación

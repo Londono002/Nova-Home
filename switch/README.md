@@ -1,19 +1,18 @@
 # Port nativo para Switch
 
-Este directorio contiene la versión gráfica nativa de NOVA HOME, probada en una Switch con Atmosphère. Lee juegos e iconos instalados y consulta el perfil, la hora, la batería y las estadísticas de juego cuando los servicios del sistema lo permiten. La navegación usa izquierda/derecha, arriba/abajo, `A`, `B`, `+`, `-` y la pantalla táctil en modo portátil. Las cajas verticales mantienen separación y la selección se amplía. El logotipo de NOVA se empaqueta en RomFS.
+Este directorio contiene la versión gráfica nativa de NOVA HOME, probada en una Switch con Atmosphère. Lee juegos e iconos instalados y consulta el perfil, la hora, la batería y las estadísticas de juego cuando los servicios del sistema lo permiten. La navegación usa izquierda/derecha, arriba/abajo, `A`, `B`, `+`, `-` y la pantalla táctil en modo portátil. Las cajas verticales mantienen separación y la selección se amplía. El logotipo de NOVA se usa como icono de la aplicación en el Homebrew Menu; no aparece en la pantalla principal.
 
-La biblioteca puede ordenarse por título A–Z, tiempo de juego y uso reciente. Los controles actuales están en evolución: quedan pendientes el stick izquierdo, corregir el foco vertical del botón de ordenar, cerrar el carrusel en sus extremos, reproducir MP3 y conectar SteamGridDB. Los paneles de mandos, ajustes, música y Álbum/Homebrew aún requieren integración.
+La biblioteca puede ordenarse por título A–Z, tiempo de juego y uso reciente. El stick izquierdo y el D-pad navegan; el foco vertical recorre perfil y accesos superiores, Ordenar, biblioteca y acciones inferiores. El carrusel tiene principio y fin y respeta el orden actual. El panel de música reproduce y lista los MP3 empaquetados, permite pausar, cambiar pista y volumen; el archivo se detiene al iniciar un juego. Los menús de mandos, ajustes y Álbum/Homebrew siguen en desarrollo.
 
 ## Compilación de NovaHome
 
-Requiere devkitPro con `devkitA64`, `libnx`, `switch-sdl2`, `switch-sdl2_gfx` y `switch-sdl2_image`, además de GNU Make. Desde el entorno MSYS2 de devkitPro instala las bibliotecas con `pacman -S switch-sdl2 switch-sdl2_gfx switch-sdl2_image` y compila:
+Requiere devkitPro con `devkitA64`, `libnx`, `switch-sdl2`, `switch-sdl2_gfx`, `switch-sdl2_image` y `switch-sdl2_mixer`. En PowerShell, desde la carpeta del proyecto, ejecuta:
 
-```sh
-cd switch/NovaHome
-make
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-nro.ps1
 ```
 
-El resultado será `switch/NovaHome/NovaHome.nro`. Copia el archivo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Las portadas actuales usan el icono incluido en los metadatos de cada juego; SteamGridDB aún no está conectado. Esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
+Al compilar, los MP3 de la carpeta raíz `Songs/` se copian automáticamente a RomFS. Añade allí futuras canciones y vuelve a compilar. El resultado será `switch/NovaHome/NovaHome.nro`; el script compila desde una copia temporal para manejar rutas de Windows que contienen espacios. Cópialo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Las portadas actuales usan el icono incluido en los metadatos de cada juego; SteamGridDB aún no está conectado al NRO. Esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
 
 ## Activación como HOME
 

@@ -55,14 +55,14 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 			$(ARCH) $(DEFINES)
 
-CFLAGS	+=	-D__SWITCH__ $(INCLUDE) `sdl2-config --cflags`
+CFLAGS	+=	-D__SWITCH__ $(INCLUDE) `sdl2-config --cflags` `$(PREFIX)pkg-config --cflags SDL2_mixer`
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lSDL2_image -lSDL2_gfx `sdl2-config --libs` -lpng16 -ljpeg -lwebp -lz -lnx -lm
+LIBS	:= -lSDL2_image -lSDL2_gfx `sdl2-config --libs` -lpng16 -ljpeg -lwebp -lz `$(PREFIX)pkg-config --static --libs SDL2_mixer` -lnx -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -158,12 +158,16 @@ ifneq ($(ROMFS),)
 	export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: $(BUILD) clean all
+.PHONY: $(BUILD) clean all prepare-songs
 
 #---------------------------------------------------------------------------------
 all: $(BUILD)
 
-$(BUILD):
+prepare-songs:
+	@mkdir -p romfs/songs
+	@cp -f ../../Songs/*.mp3 romfs/songs/ 2>/dev/null || true
+
+$(BUILD): prepare-songs
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
