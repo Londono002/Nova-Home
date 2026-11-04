@@ -24,15 +24,24 @@ Sobre el fondo del juego, la pantalla HOME reúne Perfil, reloj y batería en un
 - `index.html`: estructura de la interfaz.
 - `styles.css`: tema, componentes, animaciones y adaptación de pantalla.
 - `app.js`: biblioteca de demostración, renderizado, navegación, diálogos, reproducción de música y persistencia de arte.
-- `switch/NovaHome`: primera app nativa para comprobar arranque y mando en Atmosphère.
+- `switch/NovaHome`: app nativa SDL2/libnx, probada en una Switch con Atmosphère.
 - `.github/workflows/build-switch.yml`: genera un artefacto `.nro` con devkitPro al actualizar el port nativo.
 
-La biblioteca, el tiempo de juego y las acciones del sistema son demostrativos. Las imágenes personalizadas y el último inicio registrado se guardan por identificador de juego en el almacenamiento local del navegador; se admiten imágenes de hasta 8 MB. SteamGridDB y las operaciones de sistema no están conectados.
+## Estado del port de Switch
 
-El panel de Música reproduce las pistas incluidas en `Songs/`, permite elegir una canción, controlar la reproducción y ajustar el volumen. La música se pausa al iniciar un juego o al ocultar la ventana. Para añadir temas al proyecto, coloca los archivos en esa carpeta y registra sus rutas en la lista del reproductor.
+La versión actual ya compila como `NovaHome.nro` y se probó en una Switch con Atmosphère. Lee las aplicaciones instaladas y sus iconos, muestra el perfil, la hora, la batería y las estadísticas de juego cuando libnx permite acceder a esos servicios. Permite iniciar juegos y ordenar la biblioteca por A–Z, tiempo de juego o uso reciente. Las carátulas se muestran en cajas verticales con la seleccionada ampliada, y el logotipo de NOVA está incluido.
 
-## Alcance de Nintendo Switch
+El prototipo para PC reproduce archivos de `Songs/`, permite elegir canciones, pausar y ajustar el volumen. Esa reproducción aún no está integrada en el NRO. SteamGridDB tampoco está conectado al port nativo; por ahora, este usa los iconos oficiales incluidos en los datos de cada juego.
 
-La interfaz actual es un prototipo para PC, no es todavía un `.nro`. La fase de Switch debe empaquetarse como aplicación homebrew independiente con libnx. En ese formato, el usuario inicia NOVA HOME desde el entorno homebrew y sale de ella con los controles de salida de la aplicación o el menú HOME. Un `.nro` independiente no puede activar/desactivar el HOME original como si fuera una capa persistente que sigue ejecutándose fuera de la aplicación. Un overlay conmutado globalmente sería otro tipo de integración y requeriría investigación separada; el diseño inicial se mantiene como app independiente para limitar el alcance y los riesgos.
+### Próximas mejoras
 
-En Switch, la interfaz debe consultar el tamaño real del framebuffer y escalar el diseño para 1280 × 720 y 1920 × 1080. El prototipo web usa reglas adaptativas como aproximación para ambas resoluciones.
+- Añadir navegación con la palanca izquierda.
+- Revisar el recorrido con arriba/abajo para que el botón de ordenar y todos los controles puedan seleccionarse.
+- Hacer que el carrusel tenga principio y fin según el orden actual, en vez de volver al otro extremo.
+- Reproducir los MP3 de `Songs/` en el menú, con controles de canción y volumen.
+- Integrar SteamGridDB para buscar y cargar imágenes.
+- Completar los menús de controles, ajustes, música y Álbum/Homebrew.
+
+## Alcance de activación
+
+`NovaHome.nro` se ejecuta como una aplicación homebrew independiente. `NovaToggle.nro` y el reemplazo del menú HOME aún no están implementados; son una etapa posterior separada que requiere diseñar y validar la integración con Atmosphère y su recuperación. Este NRO no modifica los archivos de Atmosphère ni reemplaza `qlaunch`.

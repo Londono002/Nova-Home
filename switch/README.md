@@ -1,6 +1,8 @@
 # Port nativo para Switch
 
-Este directorio contiene la versión gráfica nativa de NOVA HOME. Lee el catálogo instalado y sus iconos mediante libnx, usa los datos de perfil, reloj, batería y tiempo de juego cuando los servicios los permiten, e incluye el logotipo NOVA en RomFS. La navegación funciona con izquierda/derecha, arriba/abajo, `A`, `B`, `+`, `-` y la pantalla táctil en modo portátil. Las carátulas son verticales y el espacio entre ellas se calcula para que no se superpongan; la selección se amplía.
+Este directorio contiene la versión gráfica nativa de NOVA HOME, probada en una Switch con Atmosphère. Lee juegos e iconos instalados y consulta el perfil, la hora, la batería y las estadísticas de juego cuando los servicios del sistema lo permiten. La navegación usa izquierda/derecha, arriba/abajo, `A`, `B`, `+`, `-` y la pantalla táctil en modo portátil. Las cajas verticales mantienen separación y la selección se amplía. El logotipo de NOVA se empaqueta en RomFS.
+
+La biblioteca puede ordenarse por título A–Z, tiempo de juego y uso reciente. Los controles actuales están en evolución: quedan pendientes el stick izquierdo, corregir el foco vertical del botón de ordenar, cerrar el carrusel en sus extremos, reproducir MP3 y conectar SteamGridDB. Los paneles de mandos, ajustes, música y Álbum/Homebrew aún requieren integración.
 
 ## Compilación de NovaHome
 
@@ -11,7 +13,7 @@ cd switch/NovaHome
 make
 ```
 
-El resultado será `switch/NovaHome/NovaHome.nro`. Copia el archivo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Las imágenes se muestran desde el icono oficial incluido en los metadatos de cada aplicación. Esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
+El resultado será `switch/NovaHome/NovaHome.nro`. Copia el archivo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Las portadas actuales usan el icono incluido en los metadatos de cada juego; SteamGridDB aún no está conectado. Esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
 
 ## Activación como HOME
 
