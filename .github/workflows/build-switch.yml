@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build NovaHome.nro
-        run: docker run --rm -v "$GITHUB_WORKSPACE:/data" devkitpro/devkita64:latest bash -lc "pacman -Sy --noconfirm switch-sdl2 switch-sdl2_gfx && make -C /data/switch/NovaHome"
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/data" devkitpro/devkita64:latest bash -lc "pacman -Sy --noconfirm switch-sdl2 switch-sdl2_gfx switch-sdl2_image && make -C /data/switch/NovaHome"
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:

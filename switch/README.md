@@ -1,17 +1,17 @@
 # Port nativo para Switch
 
-Este directorio contiene la primera versión gráfica nativa de NOVA HOME. Dibuja el fondo dinámico, las carátulas verticales de demostración, la tarjeta seleccionada con animación, la barra superior y el panel de juego. Izquierda/derecha cambia la selección, `+` abre opciones, `A` indica que iniciar el juego aún no está conectado y `B` cierra el panel.
+Este directorio contiene la versión gráfica nativa de NOVA HOME. Lee el catálogo instalado y sus iconos mediante libnx, usa los datos de perfil, reloj, batería y tiempo de juego cuando los servicios los permiten, e incluye el logotipo NOVA en RomFS. La navegación funciona con izquierda/derecha, arriba/abajo, `A`, `B`, `+`, `-` y la pantalla táctil en modo portátil. Las carátulas son verticales y el espacio entre ellas se calcula para que no se superpongan; la selección se amplía.
 
 ## Compilación de NovaHome
 
-Requiere devkitPro con `devkitA64`, `libnx`, `switch-sdl2` y `switch-sdl2_gfx`, además de GNU Make. Desde el entorno MSYS2 de devkitPro instala las bibliotecas con `pacman -S switch-sdl2 switch-sdl2_gfx` y compila:
+Requiere devkitPro con `devkitA64`, `libnx`, `switch-sdl2`, `switch-sdl2_gfx` y `switch-sdl2_image`, además de GNU Make. Desde el entorno MSYS2 de devkitPro instala las bibliotecas con `pacman -S switch-sdl2 switch-sdl2_gfx switch-sdl2_image` y compila:
 
 ```sh
 cd switch/NovaHome
 make
 ```
 
-El resultado será `switch/NovaHome/NovaHome.nro`. Copia el archivo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Los juegos, carátulas y tiempos aún son de demostración; esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
+El resultado será `switch/NovaHome/NovaHome.nro`. Copia el archivo a `sd:/switch/NovaHome/NovaHome.nro` y ábrelo desde el Homebrew Menu. Las imágenes se muestran desde el icono oficial incluido en los metadatos de cada aplicación. Esta app no cambia archivos de Atmosphère ni reemplaza el HOME.
 
 ## Activación como HOME
 
