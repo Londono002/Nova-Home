@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <title>NOVA HOME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient" id="ambient"></div>
+  <main class="shell">
+    <section class="hero" aria-label="Biblioteca y juego seleccionado">
+      <header class="topbar">
+        <div class="system-status" aria-label="Estado del sistema"><button class="status-profile" id="profile-nav" aria-label="Perfil Player One" title="Perfil"><span class="profile-avatar">P</span></button><span class="status-divider"></span><time class="status-time" id="system-time">12:34</time><span class="status-divider"></span><span class="battery-status" role="img" aria-label="Estado de batería" title="Batería"><span class="battery-body"><i></i><i></i><i></i></span><span class="battery-cap"></span></span></div>
+        <div class="top-right"><div class="top-icon-group" aria-label="Accesos rápidos"><button class="top-icon-button" id="controllers-nav" aria-label="Controles y Joy-Con" title="Controles y Joy-Con"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 7.5h9.6a4 4 0 0 1 3.9 3.1l1 4.4a2.4 2.4 0 0 1-4.1 2.1l-2.1-2.2H8.5l-2.1 2.2a2.4 2.4 0 0 1-4.1-2.1l1-4.4a4 4 0 0 1 3.9-3.1Z"/><path d="M7 10v4M5 12h4m6-1h.01M17 13h.01"/></svg></button><button class="top-icon-button" id="settings-button" aria-label="Ajustes" title="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 13.5 1.1.9-1.1 1.9-1.4-.4a7.9 7.9 0 0 1-1.4.8l-.3 1.5h-2.2l-.5-1.4a7.7 7.7 0 0 1-1.6 0l-.6 1.4H9.2l-.3-1.5a7.9 7.9 0 0 1-1.4-.8l-1.4.4L5 14.4l1.1-.9a7 7 0 0 1 0-1.6L5 11l1.1-1.9 1.4.4a7.9 7.9 0 0 1 1.4-.8l.3-1.5h2.2l.5 1.4a7.7 7.7 0 0 1 1.6 0l.6-1.4h2.2l.3 1.5a7.9 7.9 0 0 1 1.4.8l1.4-.4 1.1 1.9-1.1.9a7 7 0 0 1 0 1.6Z"/></svg></button><button class="top-icon-button" id="music-nav" aria-label="Música del menú" title="Música del menú"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button><button class="top-icon-button" id="album-nav" aria-label="Álbum y menú Homebrew" title="Álbum / Homebrew"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.3"/><path d="m5 17 5-5 3 3 2-2 4 4"/></svg></button></div></div>
+      </header>
+      <div class="hero-image" id="hero-image"></div><div class="hero-shade"></div>
+      <div class="sort-control"><button class="sort-toggle" id="sort-toggle" aria-expanded="false" aria-haspopup="true"><span class="sort-symbol">⇅</span><span>Ordenar</span><span class="sort-value" id="sort-current">A–Z</span><span class="sort-chevron">⌄</span></button><div class="sort-options hidden" id="sort-options" role="menu"><button role="menuitem" data-sort="recent">Última vez abierto</button><button role="menuitem" data-sort="playtime">Tiempo de juego</button><button role="menuitem" data-sort="az">De la A a la Z</button></div></div>
+      <button class="hero-arrow prev" id="prev-button" aria-label="Juego anterior">‹</button>
+      <div class="carousel-viewport" id="carousel-viewport"><div class="carousel" id="carousel" role="listbox" aria-label="Juegos de la biblioteca"></div></div>
+      <button class="hero-arrow next" id="next-button" aria-label="Siguiente juego">›</button>
+      <div class="selection-panel"><div class="selection-main"><h1 id="game-title">The Legend of Zelda: Tears of the Kingdom</h1></div><div class="selection-actions"><div class="playtime"><span class="playtime-icon">◷</span><div><span class="playtime-label">TIEMPO DE JUEGO</span><strong id="playtime-value">65 h o más</strong></div><span class="demo-tag">DEMO</span></div><div class="hero-actions"><button class="primary-button" id="play-button"><span>▶</span> Iniciar</button><button class="secondary-button" id="details-button"><span>ⓘ</span> Información</button></div></div></div>
+    </section>
+
+    <footer class="footer"><div class="footer-controls"><span><kbd>←</kbd><kbd>→</kbd> NAVEGAR</span><span><kbd>+</kbd> OPCIONES</span><span><kbd>↵</kbd> INICIAR</span></div><span class="version">PC DEMO · 0.1</span></footer>
+  </main>
+
+  <audio id="menu-music" preload="none"></audio>
+  <div class="modal-backdrop hidden" id="modal-backdrop"><section class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></section></div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
