@@ -15,10 +15,12 @@ on:
 jobs:
   nova-home:
     runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:20260219
     steps:
       - uses: actions/checkout@v4
       - name: Build NovaHome.nro
-        run: docker run --rm -v "$GITHUB_WORKSPACE:/data" devkitpro/devkita64:latest bash -lc "dkp-pacman -Sy --noconfirm switch-sdl2 switch-sdl2_gfx switch-sdl2_image && make -C /data/switch/NovaHome"
+        run: make -C switch/NovaHome
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:
