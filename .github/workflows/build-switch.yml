@@ -1,0 +1,29 @@
+name: Build Switch NRO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "switch/**"
+      - ".github/workflows/build-switch.yml"
+  pull_request:
+    paths:
+      - "switch/**"
+      - ".github/workflows/build-switch.yml"
+  workflow_dispatch:
+
+jobs:
+  nova-home:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build NovaHome.nro
+        run: make -C switch/NovaHome
+      - name: Upload NRO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaHome-nro
+          path: switch/NovaHome/NovaHome.nro
+          if-no-files-found: error

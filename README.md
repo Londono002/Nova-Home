@@ -24,6 +24,8 @@ Sobre el fondo del juego, la pantalla HOME reúne Perfil, reloj y batería en un
 - `index.html`: estructura de la interfaz.
 - `styles.css`: tema, componentes, animaciones y adaptación de pantalla.
 - `app.js`: biblioteca de demostración, renderizado, navegación, diálogos, reproducción de música y persistencia de arte.
+- `switch/NovaHome`: primera app nativa para comprobar arranque y mando en Atmosphère.
+- `.github/workflows/build-switch.yml`: genera un artefacto `.nro` con devkitPro al actualizar el port nativo.
 
 La biblioteca, el tiempo de juego y las acciones del sistema son demostrativos. Las imágenes personalizadas y el último inicio registrado se guardan por identificador de juego en el almacenamiento local del navegador; se admiten imágenes de hasta 8 MB. SteamGridDB y las operaciones de sistema no están conectados.
 
