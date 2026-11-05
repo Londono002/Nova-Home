@@ -41,5 +41,6 @@ int nova_sgdb_search(const char *key,const char *query,NovaSgdbEntry *out,int ca
 
 int nova_sgdb_art(const char *key,NovaSgdbKind kind,unsigned game_id,NovaSgdbEntry *out,int capacity,char *error,size_t error_size){
     static const char *endpoint[NOVA_SGDB_KIND_COUNT]={"grids","icons","heroes","logos"};if(kind<0||kind>=NOVA_SGDB_KIND_COUNT||!out||capacity<1){set_error(error,error_size,"La categoría de imagen no es válida.");return -1;}
-    char path[160];snprintf(path,sizeof(path),"/api/v2/%s/game/%u%s",endpoint[kind],game_id,kind==NOVA_SGDB_COVER?"?dimensions=600x900":"");return request_entries(key,path,out,capacity,false,error,error_size);
+    const char *filters=kind==NOVA_SGDB_COVER?"?dimensions=600x900":kind==NOVA_SGDB_BACKGROUND?"?dimensions=1920x620,1600x650&types=static":"";
+    char path[192];snprintf(path,sizeof(path),"/api/v2/%s/game/%u%s",endpoint[kind],game_id,filters);return request_entries(key,path,out,capacity,false,error,error_size);
 }

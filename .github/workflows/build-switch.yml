@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - "switch/**"
+      - "build-manager-nro.ps1"
       - "Songs/**"
       - "fonts/Manrope/**"
       - ".github/workflows/build-switch.yml"
   pull_request:
     paths:
       - "switch/**"
+      - "build-manager-nro.ps1"
       - "Songs/**"
       - "fonts/Manrope/**"
       - ".github/workflows/build-switch.yml"
@@ -27,9 +29,17 @@ jobs:
         run: dkp-pacman -S --needed --noconfirm switch-sdl2_mixer switch-sdl2_ttf
       - name: Build NovaHome.nro
         run: make -C switch/NovaHome
+      - name: Build NOVAManager.nro
+        run: make -C switch/NovaManager
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:
           name: NovaHome-nro
           path: switch/NovaHome/NovaHome.nro
+          if-no-files-found: error
+      - name: Upload Manager NRO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVAManager-nro
+          path: switch/NovaManager/NOVAManager.nro
           if-no-files-found: error

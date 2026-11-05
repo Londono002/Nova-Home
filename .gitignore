@@ -7,6 +7,12 @@ switch/NovaHome/*.nacp
 switch/NovaHome/*.map
 switch/NovaHome/*.lst
 switch/NovaHome/build/
+switch/NovaManager/*.nro
+switch/NovaManager/*.elf
+switch/NovaManager/*.nacp
+switch/NovaManager/*.map
+switch/NovaManager/*.lst
+switch/NovaManager/build/
 switch/NovaHome/romfs/fonts/*.ttf
 switch/NovaHome/steamgriddb.key
 switch/NovaHome/art/

@@ -36,6 +36,8 @@ powershell -ExecutionPolicy Bypass -File .\build-nro.ps1
 
 El resultado es `switch/NovaHome/NovaHome.nro`. Cópialo a `sd:/switch/NovaHome/NovaHome.nro` y ejecútalo desde el Homebrew Menu. La compilación copia los MP3 y las fuentes de Manrope a RomFS.
 
-## Estado de activación
+## NOVA Manager
 
-Este NRO es una aplicación homebrew independiente. No reemplaza el HOME de Switch ni altera Atmosphère o la NAND. La herramienta para activar y desactivar un reemplazo del HOME sigue siendo una etapa futura y separada.
+`../NovaManager/NOVAManager.nro` es una aplicación independiente. Su prototipo muestra el estado, archivos esperados y recuperación, pero sus acciones solo se simulan en memoria. No lee/escribe la SD, no cambia Atmosphère, no reinicia la consola y no reemplaza el HOME. Compila desde la raíz del repositorio con `build-manager-nro.ps1`.
+
+La integración real continúa sin implementarse. El diseño técnico y sus condiciones de seguridad están documentados en `../docs/NOVA-MANAGER-ARCHITECTURE.md`.

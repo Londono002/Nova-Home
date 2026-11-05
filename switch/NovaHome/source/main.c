@@ -19,6 +19,7 @@
 #include <time.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 
 #define SCREEN_W 1280
 #define SCREEN_H 720
@@ -54,13 +55,17 @@ static int library_scroll_row=0,library_prefetch_row=-1,library_prefetch_offset=
 static int main_cover_prefetch_index=0;
 static bool heavy_load_suppressed=false;
 static int focus_area=FOCUS_LIBRARY, focus_top=0, focus_action=0;
-static int options_open=0, option_cursor=0, panel_open=-1, show_start_until=0;
+static int options_open=0, personalization_open=0, option_cursor=0, panel_open=-1, show_start_until=0;
 static int info_open=0,confirm_delete_open=0,done_requested=0;
 static char transient_message[192]="";
 static int frame_tick=0;
 static int stick_repeat=0;
 static int held_direction_frames=0;
 static int sort_open=0,sort_cursor=0;
+static int settings_cursor=0,settings_page=0;
+static bool settings_wifi_enabled=false,settings_wifi_known=false;
+static char settings_firmware[64]="No disponible",settings_atmosphere[64]="No disponible",settings_language[48]="No disponible";
+static char settings_clock[64]="No disponible",settings_storage[96]="No disponible";
 static float carousel_position=0.0f;
 static int card_centers[GAME_CAP],card_widths[GAME_CAP];
 static int icon_prefetch_center=-1,icon_prefetch_step=0;
@@ -133,6 +138,38 @@ static void load_profile(void){if(R_FAILED(accountInitialize(AccountServiceType_
 static void open_profile_menu(void){profile_count=0;profile_cursor=0;if(R_FAILED(accountInitialize(AccountServiceType_Application))){set_message("No se pudieron consultar los perfiles.");return;}AccountUid listed[ACC_USER_LIST_SIZE];s32 total=0;if(R_SUCCEEDED(accountListAllUsers(listed,ACC_USER_LIST_SIZE,&total))){if(total>ACC_USER_LIST_SIZE)total=ACC_USER_LIST_SIZE;for(s32 i=0;i<total;i++){AccountProfile p={0};AccountProfileBase base={0};if(R_SUCCEEDED(accountGetProfile(&p,listed[i]))){if(R_SUCCEEDED(accountProfileGet(&p,NULL,&base))){profile_uids[profile_count]=listed[i];char nickname[sizeof(base.nickname)+1];memcpy(nickname,base.nickname,sizeof(base.nickname));nickname[sizeof(base.nickname)]=0;ascii_text(nickname,profile_names[profile_count],sizeof(profile_names[profile_count]));if(!profile_names[profile_count][0])snprintf(profile_names[profile_count],sizeof(profile_names[profile_count]),"Perfil %d",i+1);profile_count++;}accountProfileClose(&p);}}}accountExit();for(int i=0;i<profile_count;i++)if(profile_uids[i].uid[0]==active_profile_uid.uid[0]&&profile_uids[i].uid[1]==active_profile_uid.uid[1]){profile_cursor=i;break;}panel_open=4;}
 static void select_profile_index(void){if(profile_cursor>=0&&profile_cursor<profile_count)load_profile_user(profile_uids[profile_cursor]);panel_open=-1;}
 
+static void load_settings_summary(void){
+    settings_wifi_known=false;
+    if(R_SUCCEEDED(nifmInitialize(NifmServiceType_User))){settings_wifi_known=R_SUCCEEDED(nifmIsWirelessCommunicationEnabled(&settings_wifi_enabled));nifmExit();}
+    SetSysFirmwareVersion fw={0};
+    if(R_SUCCEEDED(setsysInitialize())){if(R_SUCCEEDED(setsysGetFirmwareVersion(&fw))&&fw.display_version[0]){char display[sizeof(fw.display_version)+1];memcpy(display,fw.display_version,sizeof(fw.display_version));display[sizeof(fw.display_version)]=0;char *ams=strstr(display,"|AMS ");if(ams){*ams=0;snprintf(settings_atmosphere,sizeof(settings_atmosphere),"%s",ams+5);}snprintf(settings_firmware,sizeof(settings_firmware),"%s",display);}setsysExit();}
+    if(R_SUCCEEDED(setInitialize())){u64 code=0;SetLanguage lang;if(R_SUCCEEDED(setGetSystemLanguage(&code))&&R_SUCCEEDED(setMakeLanguage(code,&lang))){static const char *labels[]={"Japonés","Inglés (EE. UU.)","Francés","Alemán","Italiano","Español","Chino simplificado","Coreano","Neerlandés","Portugués","Ruso","Chino tradicional","Inglés (Reino Unido)","Francés (Canadá)","Español (Latinoamérica)","Chino simplificado","Chino tradicional","Portugués (Brasil)"};if((unsigned)lang<sizeof(labels)/sizeof(labels[0]))snprintf(settings_language,sizeof(settings_language),"%s",labels[lang]);}setExit();}
+    u64 timestamp=0;TimeCalendarTime cal={0};TimeCalendarAdditionalInfo extra={0};
+    if(R_SUCCEEDED(timeGetCurrentTime(TimeType_LocalSystemClock,&timestamp))&&R_SUCCEEDED(timeToCalendarTimeWithMyRule(timestamp,&cal,&extra)))snprintf(settings_clock,sizeof(settings_clock),"%04u-%02u-%02u  ·  %02u:%02u",cal.year,cal.month,cal.day,cal.hour,cal.minute);
+    struct statvfs sv;if(statvfs("sdmc:/",&sv)==0){u64 total=(u64)sv.f_blocks*(u64)sv.f_frsize,freeb=(u64)sv.f_bavail*(u64)sv.f_frsize;snprintf(settings_storage,sizeof(settings_storage),"microSD: %.1f / %.1f GB libres",(double)freeb/1073741824.0,(double)total/1073741824.0);}
+    FILE *vf=fopen("sdmc:/atmosphere/version.txt","r");if(vf){char line[64];if(fgets(line,sizeof(line),vf)){line[strcspn(line,"\r\n")]=0;if(line[0])snprintf(settings_atmosphere,sizeof(settings_atmosphere),"%s",line);}fclose(vf);}
+}
+static void open_settings_menu(void){settings_cursor=0;settings_page=0;load_settings_summary();panel_open=5;}
+static void toggle_airplane_mode(void){
+    bool enabled=false;if(R_FAILED(nifmInitialize(NifmServiceType_User))){set_message("No se pudo consultar el estado de red.");return;}
+    Result read_rc=nifmIsWirelessCommunicationEnabled(&enabled);nifmExit();
+    if(R_FAILED(read_rc)){set_message("No se pudo consultar el estado de red.");return;}
+    Result rc=nifmInitialize(NifmServiceType_System);
+    if(R_SUCCEEDED(rc)){rc=nifmSetWirelessCommunicationEnabled(!enabled);nifmExit();}
+    if(R_FAILED(rc)){set_message("Atmosphere no concedió permiso para cambiar el modo avión desde NOVA.");return;}
+    load_settings_summary();set_message(enabled?"Modo avión activado.":"Modo avión desactivado.");
+}
+static void open_network_configuration(void){
+    if(R_FAILED(nifmInitialize(NifmServiceType_User))){set_message("No se pudo iniciar la configuración de internet.");return;}
+    NifmRequest req={0};Result rc=nifmCreateRequest(&req,true);
+    if(R_SUCCEEDED(rc)){rc=nifmRequestSubmitAndWait(&req);if(R_SUCCEEDED(rc))rc=nifmLaHandleNetworkRequestResult(&req);nifmRequestClose(&req);}
+    nifmExit();if(R_FAILED(rc))set_message("No se pudo abrir la configuración de internet.");else load_settings_summary();
+}
+static void activate_settings_option(void){
+    if(settings_page==0){switch(settings_cursor){case 0:toggle_airplane_mode();break;case 1:open_network_configuration();break;case 2:settings_page=1;load_settings_summary();break;case 3:settings_page=2;load_settings_summary();break;default:panel_open=-1;break;}}
+    else settings_page=0;
+}
+
 static void draw_texture_fit(SDL_Renderer *r,SDL_Texture *texture,SDL_Rect bounds,bool crop){
     if(!texture)return;
     int iw=0,ih=0;
@@ -178,7 +215,7 @@ static void load_custom_art_kind(Game *g,int kind){
     int max_w=1920,max_h=1080;if(kind==NOVA_SGDB_COVER){max_w=1200;max_h=1800;}else if(kind==NOVA_SGDB_LOGO){max_w=2048;max_h=1024;}
     float scale=1.0f;if(surface->w>max_w)scale=(float)max_w/surface->w;if(surface->h*scale>max_h)scale=(float)max_h/surface->h;
     SDL_Surface *upload=surface;
-    if(scale<1.0f){int width=(int)(surface->w*scale),height=(int)(surface->h*scale);if(width<1)width=1;if(height<1)height=1;SDL_Surface *scaled=SDL_CreateRGBSurfaceWithFormat(0,width,height,32,SDL_PIXELFORMAT_RGBA32);if(scaled&&SDL_BlitScaled(surface,NULL,scaled,NULL)==0)upload=scaled;else if(scaled)SDL_FreeSurface(scaled);}
+    if(scale<1.0f){int width=(int)(surface->w*scale),height=(int)(surface->h*scale);if(width<1)width=1;if(height<1)height=1;SDL_Surface *scaled=SDL_CreateRGBSurfaceWithFormat(0,width,height,32,SDL_PIXELFORMAT_RGBA32);if(!scaled||SDL_BlitScaled(surface,NULL,scaled,NULL)<0){if(scaled)SDL_FreeSurface(scaled);SDL_FreeSurface(surface);return;}upload=scaled;}
     g->art[kind]=SDL_CreateTextureFromSurface(app_renderer,upload);
     if(upload!=surface)SDL_FreeSurface(upload);
     SDL_FreeSurface(surface);
@@ -388,6 +425,14 @@ static void draw_library_card(SDL_Renderer *r,int cx,int y,int w,int h,int chose
     draw_outlined_centered_fit_text(r,cx,y+h-45,w-20,"BIBLIOTECA",chosen?16:13);
 }
 
+static void draw_settings_menu(SDL_Renderer *r){
+    round_box(r,250,82,780,556,20,(SDL_Color){13,14,24,250});purple_outline(r,250,82,780,556,20,(SDL_Color){100,66,166,240});
+    txt_weight(r,294,105,settings_page==0?"AJUSTES DE NOVA":settings_page==1?"GESTIÓN DE DATOS":"INFORMACIÓN DE LA CONSOLA",(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);
+    if(settings_page==0){const char *labels[]={"Modo avión","Configuración de internet","Gestión de datos","Información de la consola","Cerrar"};char state[96];for(int i=0;i<5;i++){int y=155+i*78;round_box(r,292,y,696,62,13,i==settings_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,12});purple_outline(r,292,y,696,62,13,i==settings_cursor?(SDL_Color){151,113,221,240}:(SDL_Color){91,62,154,160});nova_ui_draw_text_fit(r,318,y+22,labels[i],(SDL_Color){245,244,250,255},i==settings_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM,16,430);if(i==0){snprintf(state,sizeof(state),"%s",settings_wifi_known?(settings_wifi_enabled?"Desactivado":"Activado"):"No disponible");nova_ui_draw_text_fit(r,755,y+22,state,(SDL_Color){202,189,255,255},NOVA_FONT_SEMIBOLD,14,205);}else if(i==1)nova_ui_draw_text_fit(r,755,y+22,"Abrir configuración",(SDL_Color){202,189,255,255},NOVA_FONT_MEDIUM,12,205);else if(i==2)nova_ui_draw_text_fit(r,755,y+22,"Ver almacenamiento",(SDL_Color){202,189,255,255},NOVA_FONT_MEDIUM,12,205);else if(i==3)nova_ui_draw_text_fit(r,755,y+22,"Firmware y sistema",(SDL_Color){202,189,255,255},NOVA_FONT_MEDIUM,12,205);}txt(r,296,565,"A  Abrir / cambiar        B  Cerrar",(SDL_Color){194,179,255,255});}
+    else if(settings_page==1){txt_weight(r,310,165,"Almacenamiento",(SDL_Color){202,189,255,255},NOVA_FONT_SEMIBOLD);txt(r,310,205,settings_storage,(SDL_Color){245,244,250,255});char count[96];snprintf(count,sizeof(count),"Juegos detectados por NOVA: %d",game_count);txt(r,310,250,count,(SDL_Color){245,244,250,255});txt(r,310,305,"La eliminación de juegos se encuentra en Opciones del juego.",(SDL_Color){195,193,207,255});txt(r,310,565,"A / B  Volver",(SDL_Color){194,179,255,255});}
+    else{char line[160];snprintf(line,sizeof(line),"Firmware de Nintendo Switch: %s",settings_firmware);txt(r,310,165,line,(SDL_Color){245,244,250,255});snprintf(line,sizeof(line),"Atmosphère: %s",settings_atmosphere);txt(r,310,205,line,(SDL_Color){245,244,250,255});snprintf(line,sizeof(line),"Idioma: %s",settings_language);txt(r,310,245,line,(SDL_Color){245,244,250,255});snprintf(line,sizeof(line),"Fecha y hora: %s",settings_clock);txt(r,310,285,line,(SDL_Color){245,244,250,255});txt(r,310,565,"A / B  Volver",(SDL_Color){194,179,255,255});}
+}
+
 static void draw_header(SDL_Renderer *r){
     round_box(r,24,18,310,46,10,(focus_area==FOCUS_TOP&&focus_top==0)?(SDL_Color){82,67,143,230}:(SDL_Color){12,14,21,195});
     purple_outline(r,24,18,310,46,10,(SDL_Color){91,62,154,220});
@@ -431,15 +476,25 @@ static void draw_screen(SDL_Renderer *r,float carousel_pos,int tick){
             float emphasis=(float)(w-SMALL_W)/(BIG_W-SMALL_W);
             if(i<main_game_count())draw_card(r,&games[i],cx,y,w,h,emphasis>0.985f);else draw_library_card(r,cx,y,w,h,emphasis>0.985f);
         }
-        round_box(r,315,520,650,176,18,(SDL_Color){15,13,27,205});purple_outline(r,315,520,650,176,18,(SDL_Color){100,66,166,240});
-        if(g){if(g->art[NOVA_SGDB_LOGO])draw_texture_fit(r,g->art[NOVA_SGDB_LOGO],(SDL_Rect){334,531,286,150},false);else nova_ui_draw_text_centered_fit(r,477,591,g->title,(SDL_Color){235,230,250,255},NOVA_FONT_BOLD,22,270);
+        if(g){round_box(r,315,520,650,176,18,(SDL_Color){15,13,27,205});purple_outline(r,315,520,650,176,18,(SDL_Color){100,66,166,240});
+            if(g->art[NOVA_SGDB_LOGO])draw_texture_fit(r,g->art[NOVA_SGDB_LOGO],(SDL_Rect){334,531,286,150},false);else nova_ui_draw_text_centered_fit(r,477,591,g->title,(SDL_Color){235,230,250,255},NOVA_FONT_BOLD,22,270);
             round_box(r,642,530,300,43,11,(focus_area==FOCUS_ACTIONS&&focus_action==0)?(SDL_Color){183,163,255,255}:(SDL_Color){239,235,255,245});purple_outline(r,642,530,300,43,11,(SDL_Color){149,117,211,240});nova_ui_draw_text_centered_fit(r,792,543,"A   INICIAR",(SDL_Color){32,29,47,255},NOVA_FONT_BOLD,18,270);
             round_box(r,642,580,300,40,11,(focus_area==FOCUS_ACTIONS&&focus_action==1)?(SDL_Color){117,94,204,255}:(SDL_Color){255,255,255,22});purple_outline(r,642,580,300,40,11,(SDL_Color){100,66,166,240});nova_ui_draw_text_centered_fit(r,792,591,"+   OPCIONES",(SDL_Color){255,255,255,255},NOVA_FONT_BOLD,16,270);
-            char play[64];if(g->playtime_valid){u64 hours=g->play_ns/3600000000000ULL,minutes=(g->play_ns%3600000000000ULL)/60000000000ULL;snprintf(play,sizeof(play),"TIEMPO JUGADO   %llu h %llu min",(unsigned long long)hours,(unsigned long long)minutes);}else snprintf(play,sizeof(play),g->playtime_loaded?"TIEMPO JUGADO   No disponible":"TIEMPO JUGADO   Cargando...");nova_ui_draw_text_centered_fit(r,792,643,play,(SDL_Color){220,211,245,255},NOVA_FONT_MEDIUM,13,295);
-        }else{round_box(r,642,560,300,54,11,(SDL_Color){239,235,255,245});purple_outline(r,642,560,300,54,11,(SDL_Color){149,117,211,240});nova_ui_draw_text_centered_fit(r,792,579,"A   ABRIR BIBLIOTECA",(SDL_Color){32,29,47,255},NOVA_FONT_BOLD,17,280);}
+            nova_ui_draw_text_centered_fit(r,792,628,"TIEMPO DE JUEGO",(SDL_Color){186,169,226,255},NOVA_FONT_SEMIBOLD,12,295);
+            char play[64];if(g->playtime_valid){u64 hours=g->play_ns/3600000000000ULL,minutes=(g->play_ns%3600000000000ULL)/60000000000ULL;snprintf(play,sizeof(play),"%llu h %llu min",(unsigned long long)hours,(unsigned long long)minutes);}else snprintf(play,sizeof(play),g->playtime_loaded?"No disponible":"Cargando...");nova_ui_draw_text_centered_fit(r,792,646,play,(SDL_Color){248,244,255,255},NOVA_FONT_BOLD,17,295);
+        }else{nova_ui_draw_text_centered_fit(r,640,646,"A - Abrir biblioteca",(SDL_Color){243,235,255,255},NOVA_FONT_SEMIBOLD,17,500);}
     }
     if(show_start_until>tick)nova_ui_draw_text_fit(r,270,666,transient_message[0]?transient_message:"No se pudo iniciar el juego seleccionado.",(SDL_Color){255,255,255,255},NOVA_FONT_MEDIUM,12,740);
-    if(options_open){const char *opts[]={"Iniciar juego","Información","Cambiar carátula","Cambiar logotipo","Cambiar fondo","Restaurar apariencia","Eliminar juego","Cancelar"};round_box(r,286,76,708,572,20,(SDL_Color){14,13,24,250});purple_outline(r,286,76,708,572,20,(SDL_Color){100,66,166,240});txt_weight(r,330,98,"OPCIONES DEL JUEGO",(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);nova_ui_draw_text_fit(r,330,123,games[active_game_index()].title,(SDL_Color){176,174,194,255},NOVA_FONT_MEDIUM,12,620);for(int i=0;i<8;i++){int y=151+i*56;round_box(r,322,y,636,48,12,i==option_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,13});if(i==option_cursor)purple_outline(r,322,y,636,48,12,(SDL_Color){151,113,221,240});txt_weight(r,350,y+16,opts[i],i==6?(SDL_Color){255,190,196,255}:(SDL_Color){241,240,248,255},i==option_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM);}txt(r,330,615,"A   Elegir                         B   Cerrar",(SDL_Color){194,179,255,255});}
+    if(options_open){
+        const char *main_opts[]={"Iniciar juego","Información","Personalización","Restaurar apariencia","Eliminar juego","Cancelar"};
+        const char *art_opts[]={"Cambiar carátula","Cambiar fondo","Cambiar logotipo","Volver a opciones"};
+        const char **opts=personalization_open?art_opts:main_opts;int option_count=personalization_open?4:6;
+        round_box(r,286,76,708,572,20,(SDL_Color){14,13,24,250});purple_outline(r,286,76,708,572,20,(SDL_Color){100,66,166,240});
+        txt_weight(r,330,98,personalization_open?"PERSONALIZACIÓN":"OPCIONES DEL JUEGO",(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);
+        nova_ui_draw_text_fit(r,330,123,games[active_game_index()].title,(SDL_Color){176,174,194,255},NOVA_FONT_MEDIUM,12,620);
+        for(int i=0;i<option_count;i++){int y=151+i*56;round_box(r,322,y,636,48,12,i==option_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,13});if(i==option_cursor)purple_outline(r,322,y,636,48,12,(SDL_Color){151,113,221,240});txt_weight(r,350,y+16,opts[i],(!personalization_open&&i==4)?(SDL_Color){255,190,196,255}:(SDL_Color){241,240,248,255},i==option_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM);}
+        txt(r,330,615,"A   Elegir                         B   Volver",(SDL_Color){194,179,255,255});
+    }
     if(steamgrid_open){round_box(r,120,68,1040,584,18,(SDL_Color){12,14,22,250});
         if(steamgrid_step==1){const char *kinds[]={"CARÁTULA","LOGOTIPO","FONDO"};char heading[96];snprintf(heading,sizeof(heading),"PERSONALIZAR %s",kinds[steamgrid_kind==NOVA_SGDB_COVER?0:steamgrid_kind==NOVA_SGDB_LOGO?1:2]);txt_weight(r,180,105,heading,(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);txt(r,180,140,steamgrid_key[0]?"Clave API configurada en esta consola.":"Configura tu clave una vez para buscar imágenes.",(SDL_Color){190,188,205,255});const char *clear_labels[]={"Borrar carátula aplicada","Borrar logotipo aplicado","Borrar fondo aplicado"};const char *labels[]={"Buscar imágenes de este juego","Buscar otro juego…",clear_labels[steamgrid_kind==NOVA_SGDB_COVER?0:steamgrid_kind==NOVA_SGDB_LOGO?1:2],"Borrar clave guardada","Introducir o cambiar clave API"};const int xs[]={180,650,180,650,415},ys[]={185,185,315,315,445},ws[]={450,450,450,450,450},hs[]={100,100,100,100,76};for(int i=0;i<5;i++){round_box(r,xs[i],ys[i],ws[i],hs[i],15,i==steamgrid_menu_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,12});purple_outline(r,xs[i],ys[i],ws[i],hs[i],15,i==steamgrid_menu_cursor?(SDL_Color){151,113,221,245}:(SDL_Color){91,62,154,190});nova_ui_draw_text_fit(r,xs[i]+26,ys[i]+(hs[i]/2)-9,labels[i],(SDL_Color){245,244,250,255},i==steamgrid_menu_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM,16,ws[i]-52);}txt(r,180,562,"A  Elegir                                  B  Cerrar",(SDL_Color){194,179,255,255});}
         else if(steamgrid_step==2||steamgrid_step==4||steamgrid_step==6){const char *status=steamgrid_step==2?"Buscando juegos…":steamgrid_step==4?"Cargando imágenes y miniaturas…":"Descargando y aplicando imagen…";txt_weight(r,190,180,"STEAMGRIDDB",(SDL_Color){194,179,255,255},NOVA_FONT_BOLD);txt(r,190,245,status,(SDL_Color){255,255,255,255});txt(r,190,305,"La interfaz seguirá respondiendo mientras se conecta.",(SDL_Color){178,181,195,255});}
@@ -449,21 +504,28 @@ static void draw_screen(SDL_Renderer *r,float carousel_pos,int tick){
     if(info_open&&game_count){Game *info=&games[active_game_index()];round_box(r,330,185,620,350,18,(SDL_Color){14,16,24,250});txt_weight(r,370,220,"INFORMACIÓN DEL JUEGO",(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);nova_ui_draw_text(r,370,260,info->title,(SDL_Color){255,255,255,255},NOVA_FONT_SEMIBOLD,17);char line[300];snprintf(line,sizeof(line),"Desarrollador: %s",info->author[0]?info->author:"No disponible");txt(r,370,305,line,(SDL_Color){220,219,232,255});snprintf(line,sizeof(line),"Versión: %s",info->version[0]?info->version:"No disponible");txt(r,370,335,line,(SDL_Color){220,219,232,255});snprintf(line,sizeof(line),"ID: %016llX",(unsigned long long)info->id);txt(r,370,365,line,(SDL_Color){220,219,232,255});u64 hours=info->play_ns/3600000000000ULL;snprintf(line,sizeof(line),"Tiempo jugado: %llu h",(unsigned long long)hours);txt(r,370,395,line,(SDL_Color){220,219,232,255});txt(r,370,490,"A / B  Cerrar",(SDL_Color){194,179,255,255});}
     if(confirm_delete_open&&game_count){round_box(r,350,235,580,230,18,(SDL_Color){35,15,23,252});txt_weight(r,390,275,"ELIMINAR JUEGO",(SDL_Color){255,150,160,255},NOVA_FONT_BOLD);nova_ui_draw_text(r,390,315,"Esta acción eliminará el juego y sus datos de la consola.",(SDL_Color){255,255,255,255},NOVA_FONT_MEDIUM,15);txt(r,390,365,"A  Confirmar eliminación",(SDL_Color){255,180,180,255});txt(r,390,405,"B  Cancelar",(SDL_Color){220,219,232,255});}
     if(sort_open){round_box(r,370,195,540,260,16,(SDL_Color){14,16,24,250});txt_weight(r,405,225,"ORDENAR JUEGOS",(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);const char *opts[]={"Título · A–Z","Tiempo de juego","Última vez abierto"};for(int i=0;i<3;i++){char row[96];snprintf(row,sizeof(row),"%c %s%s",i==sort_cursor?'>':' ',opts[i],i==sort_mode?"  · ACTUAL":"");txt_weight(r,405,267+i*40,row,i==sort_cursor?(SDL_Color){255,255,255,255}:(SDL_Color){225,225,235,255},i==sort_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM);}txt(r,405,410,"A   Aplicar       B   Volver",(SDL_Color){194,179,255,255});}
-    if(panel_open>=0){const char *names[]={"CONTROLES","AJUSTES","MUSICA","ALBUM / HOMEBREW","PERFIL"};SDL_Rect panel={400,215,480,270};if(panel_open==2)nova_music_draw_panel(menu_music,r,panel);else if(panel_open==4){round_box(r,330,115,620,490,20,(SDL_Color){14,16,24,250});purple_outline(r,330,115,620,490,20,(SDL_Color){100,66,166,240});txt_weight(r,375,145,"ELIGE UN PERFIL",(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);if(!profile_count)txt(r,375,205,"No se encontraron perfiles en esta consola.",(SDL_Color){235,232,242,255});for(int i=0;i<profile_count;i++){int y=195+i*48;bool active=profile_uids[i].uid[0]==active_profile_uid.uid[0]&&profile_uids[i].uid[1]==active_profile_uid.uid[1];round_box(r,365,y,550,40,10,i==profile_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,12});if(i==profile_cursor)purple_outline(r,365,y,550,40,10,(SDL_Color){151,113,221,240});char row[96];snprintf(row,sizeof(row),"%.45s%s",profile_names[i],active?"  ·  ACTUAL":"");nova_ui_draw_text_fit(r,390,y+11,row,(SDL_Color){245,244,250,255},i==profile_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM,15,500);}txt(r,375,565,"A  Seleccionar       B  Cerrar",(SDL_Color){194,179,255,255});}else{round_box(r,panel.x,panel.y,panel.w,panel.h,16,(SDL_Color){14,16,24,248});txt_weight(r,440,250,names[panel_open],(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);txt(r,440,292,"Este panel se conectara en una proxima etapa.",(SDL_Color){255,255,255,255});txt_weight(r,440,390,"A / B  Cerrar",(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);}}
+    if(panel_open>=0){const char *names[]={"CONTROLES","AJUSTES","MUSICA","ALBUM / HOMEBREW","PERFIL","AJUSTES NOVA"};SDL_Rect panel={400,215,480,270};if(panel_open==2)nova_music_draw_panel(menu_music,r,panel);else if(panel_open==4){round_box(r,330,115,620,490,20,(SDL_Color){14,16,24,250});purple_outline(r,330,115,620,490,20,(SDL_Color){100,66,166,240});txt_weight(r,375,145,"ELIGE UN PERFIL",(SDL_Color){211,195,255,255},NOVA_FONT_BOLD);if(!profile_count)txt(r,375,205,"No se encontraron perfiles en esta consola.",(SDL_Color){235,232,242,255});for(int i=0;i<profile_count;i++){int y=195+i*48;bool active=profile_uids[i].uid[0]==active_profile_uid.uid[0]&&profile_uids[i].uid[1]==active_profile_uid.uid[1];round_box(r,365,y,550,40,10,i==profile_cursor?(SDL_Color){68,50,109,245}:(SDL_Color){255,255,255,12});if(i==profile_cursor)purple_outline(r,365,y,550,40,10,(SDL_Color){151,113,221,240});char row[96];snprintf(row,sizeof(row),"%.45s%s",profile_names[i],active?"  ·  ACTUAL":"");nova_ui_draw_text_fit(r,390,y+11,row,(SDL_Color){245,244,250,255},i==profile_cursor?NOVA_FONT_BOLD:NOVA_FONT_MEDIUM,15,500);}txt(r,375,565,"A  Seleccionar       B  Cerrar",(SDL_Color){194,179,255,255});}else if(panel_open==5){draw_settings_menu(r);}else{round_box(r,panel.x,panel.y,panel.w,panel.h,16,(SDL_Color){14,16,24,248});txt_weight(r,440,250,names[panel_open],(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);txt(r,440,292,"Este panel se conectara en una proxima etapa.",(SDL_Color){255,255,255,255});txt_weight(r,440,390,"A / B  Cerrar",(SDL_Color){194,179,255,255},NOVA_FONT_MEDIUM);}}
 }
 
 static void set_message(const char *message){snprintf(transient_message,sizeof(transient_message),"%s",message);show_start_until=frame_tick+300;}
 static void activate_game_option(void){
     if(!game_count){options_open=0;return;}
     int target=active_game_index();Game *g=&games[target];
+    if(personalization_open){
+        switch(option_cursor){
+            case 0: options_open=0;personalization_open=0;open_steamgrid(NOVA_SGDB_COVER);break;
+            case 1: options_open=0;personalization_open=0;open_steamgrid(NOVA_SGDB_BACKGROUND);break;
+            case 2: options_open=0;personalization_open=0;open_steamgrid(NOVA_SGDB_LOGO);break;
+            default: personalization_open=0;option_cursor=2;break;
+        }
+        return;
+    }
     switch(option_cursor){
         case 0: options_open=0;launch_game(g);break;
         case 1: options_open=0;query_playtime_for_game(g);info_open=1;break;
-        case 2: options_open=0;open_steamgrid(NOVA_SGDB_COVER);break;
-        case 3: options_open=0;open_steamgrid(NOVA_SGDB_LOGO);break;
-        case 4: options_open=0;open_steamgrid(NOVA_SGDB_BACKGROUND);break;
-        case 5: options_open=0;nova_art_store_restore(g->id);for(int i=0;i<NOVA_SGDB_KIND_COUNT;i++)if(g->art[i]){SDL_DestroyTexture(g->art[i]);g->art[i]=NULL;}g->art_loaded_mask=0;load_custom_art(g,true,true);set_message("Apariencia original restaurada.");break;
-        case 6: options_open=0;confirm_delete_open=1;break;
+        case 2: personalization_open=1;option_cursor=0;break;
+        case 3: options_open=0;nova_art_store_restore(g->id);for(int i=0;i<NOVA_SGDB_KIND_COUNT;i++)if(g->art[i]){SDL_DestroyTexture(g->art[i]);g->art[i]=NULL;}g->art_loaded_mask=0;load_custom_art(g,true,true);set_message("Apariencia original restaurada.");break;
+        case 4: options_open=0;confirm_delete_open=1;break;
         default: options_open=0;break;
     }
 }
@@ -480,7 +542,7 @@ static void delete_selected_game(void){
 static bool activate_header(bool right_shoulder_held){
     if(focus_top==0){open_profile_menu();return false;}
     if(focus_top==1){HidLaControllerSupportArg arg;hidLaCreateControllerSupportArg(&arg);Result rc=hidLaShowControllerSupportForSystem(NULL,&arg,true);if(R_FAILED(rc))set_message("No se pudo abrir el panel de controles.");return false;}
-    if(focus_top==2){Result rc=appletPerformSystemButtonPressing(AppletSystemButtonType_HomeButtonShortPressing);if(R_FAILED(rc))set_message("Abre Ajustes desde el menú HOME de la consola.");return false;}
+    if(focus_top==2){open_settings_menu();return false;}
     if(focus_top==3){panel_open=2;return false;}
     if(focus_top==4){
         // Holding R while opening Album preserves the Switch's original
@@ -491,12 +553,20 @@ static bool activate_header(bool right_shoulder_held){
             return false;
         }
         if(envHasNextLoad()){
-            const char *paths[]={"sdmc:/hbmenu.nro","sdmc:/switch/hbmenu.nro"};struct stat info;
-            for(size_t i=0;i<sizeof(paths)/sizeof(paths[0]);i++)if(stat(paths[i],&info)==0&&S_ISREG(info.st_mode)){
-                if(R_SUCCEEDED(envSetNextLoad(paths[i],NULL))){nova_music_set_active(menu_music,false);done_requested=1;return true;}
+            const char *hbmenu_path="sdmc:/hbmenu.nro";
+            struct stat info;
+            if(stat(hbmenu_path,&info)!=0||!S_ISREG(info.st_mode)){
+                set_message("No se encontró sdmc:/hbmenu.nro.");
+                return false;
             }
+            // hbloader forwards argv to the NRO. hbmenu needs argv[0] so
+            // libnx can locate its own RomFS and mount assets.zip.
+            Result rc=envSetNextLoad(hbmenu_path,hbmenu_path);
+            if(R_SUCCEEDED(rc)){nova_music_set_active(menu_music,false);done_requested=1;return true;}
+            set_message("El loader no aceptó el cambio a hbmenu.");
+            return false;
         }
-        Result rc=albumLaShowAllAlbumFilesForHomeMenu();if(R_FAILED(rc))set_message("No se pudo abrir Album ni encontrar hbmenu.nro en la SD.");
+        set_message("Este entorno no permite cargar otro NRO. R + Álbum abre el visor original.");
     }
     return false;
 }
@@ -518,7 +588,7 @@ int main(int argc,char *argv[]){
     int tick=0,done=0,touching=0,dragging=0,drag_start_x=0,drag_start_selected=0,tap_card=-1;
     while(appletMainLoop()&&!done){
         frame_tick=tick;int selection_changed=0;padUpdate(&pad);u64 down=padGetButtonsDown(&pad),held=padGetButtons(&pad);steamgrid_poll();
-        if(down&HidNpadButton_Plus){if(steamgrid_open&&!steamgrid_task.running){steamgrid_open=0;steamgrid_clear_thumbs();}else if(panel_open>=0)panel_open=-1;else if(info_open)info_open=0;else if(confirm_delete_open)confirm_delete_open=0;else if(sort_open)sort_open=0;else if(options_open)options_open=0;else if(!library_open&&selected>=main_game_count())open_library();else{options_open=1;option_cursor=0;}}
+        if(down&HidNpadButton_Plus){if(steamgrid_open&&!steamgrid_task.running){steamgrid_open=0;steamgrid_clear_thumbs();}else if(panel_open>=0)panel_open=-1;else if(info_open)info_open=0;else if(confirm_delete_open)confirm_delete_open=0;else if(sort_open)sort_open=0;else if(options_open){options_open=0;personalization_open=0;}else if(!library_open&&selected>=main_game_count())open_library();else{options_open=1;personalization_open=0;option_cursor=0;}}
         if(down&HidNpadButton_Minus)done=1;
         HidAnalogStickState left_stick=padGetStickPos(&pad,0);
         int raw_left=(held&HidNpadButton_Left)||left_stick.x < -16000;
@@ -542,51 +612,54 @@ int main(int argc,char *argv[]){
         }
         if(panel_open==2){if(nav_left)nova_music_previous(menu_music);if(nav_right)nova_music_next(menu_music);if(nav_up)nova_music_adjust_volume(menu_music,5);if(nav_down)nova_music_adjust_volume(menu_music,-5);}
         else if(panel_open==4){if(nav_up&&profile_cursor>0)profile_cursor--;if(nav_down&&profile_cursor<profile_count-1)profile_cursor++;}
+        else if(panel_open==5&&settings_page==0){if(nav_up&&settings_cursor>0)settings_cursor--;if(nav_down&&settings_cursor<4)settings_cursor++;}
         else if(steamgrid_open&&!steamgrid_task.running){if(steamgrid_step==1){int row=steamgrid_menu_cursor/2,col=steamgrid_menu_cursor%2;if(nav_left&&col)steamgrid_menu_cursor--;if(nav_right&&!col&&steamgrid_menu_cursor<4)steamgrid_menu_cursor++;if(nav_up&&row>0)steamgrid_menu_cursor-=2;if(nav_down&&row<2&&steamgrid_menu_cursor+2<5)steamgrid_menu_cursor+=2;}else if(steamgrid_step==3){if(nav_up&&steamgrid_cursor>0)steamgrid_cursor--;if(nav_down&&steamgrid_cursor<steamgrid_count-1)steamgrid_cursor++;}else if(steamgrid_step==5&&steamgrid_count>0){if(nav_left&&steamgrid_cursor>0)steamgrid_cursor--;if(nav_right&&steamgrid_cursor<steamgrid_count-1)steamgrid_cursor++;if(nav_up&&steamgrid_cursor>=3)steamgrid_cursor-=3;if(nav_down&&steamgrid_cursor+3<steamgrid_count)steamgrid_cursor+=3;}}
         else if(sort_open){if(nav_up&&sort_cursor>0)sort_cursor--;if(nav_down&&sort_cursor<2)sort_cursor++;}
-        else if(options_open){if(nav_up&&option_cursor>0)option_cursor--;if(nav_down&&option_cursor<7)option_cursor++;}
+        else if(options_open){int option_count=personalization_open?4:6;if(nav_up&&option_cursor>0)option_cursor--;if(nav_down&&option_cursor<option_count-1)option_cursor++;}
         else if(library_open&&panel_open<0){
             if(focus_area==FOCUS_TOP){if(nav_left)focus_top=(focus_top+4)%5;if(nav_right)focus_top=(focus_top+1)%5;if(nav_down)focus_area=FOCUS_SORT;}
             else if(focus_area==FOCUS_SORT){if(nav_up)focus_area=FOCUS_TOP;if(nav_down)focus_area=FOCUS_LIBRARY;}
             else {if(nav_left&&library_cursor>0)library_cursor--;if(nav_right&&library_cursor<game_count-1)library_cursor++;if(nav_up){if(library_cursor>=5)library_cursor-=5;else focus_area=FOCUS_SORT;}if(nav_down&&library_cursor+5<game_count)library_cursor+=5;update_library_scroll();}
         }
         else if(panel_open<0&&!info_open&&!confirm_delete_open){
-            if(nav_left||nav_right){int dir=nav_left?-1:1;if(focus_area==FOCUS_LIBRARY&&carousel_count()){int next=selected+dir;if(next>=0&&next<carousel_count()){selected=next;selection_changed=1;}}else if(focus_area==FOCUS_TOP)focus_top=(focus_top+dir+5)%5;else if(focus_area==FOCUS_ACTIONS){int next=focus_action+dir;if(next>=0&&next<=1)focus_action=next;}}
-            if(nav_up){if(focus_area==FOCUS_ACTIONS)focus_area=FOCUS_LIBRARY;else if(focus_area==FOCUS_LIBRARY)focus_area=FOCUS_SORT;else if(focus_area==FOCUS_SORT)focus_area=FOCUS_TOP;}
-            if(nav_down){if(focus_area==FOCUS_TOP)focus_area=FOCUS_SORT;else if(focus_area==FOCUS_SORT)focus_area=FOCUS_LIBRARY;else if(focus_area==FOCUS_LIBRARY)focus_area=FOCUS_ACTIONS;}
+            if(nav_left||nav_right){int dir=nav_left?-1:1;if(focus_area==FOCUS_LIBRARY&&carousel_count()){int next=selected+dir;if(next>=0&&next<carousel_count()){selected=next;selection_changed=1;}}else if(focus_area==FOCUS_TOP)focus_top=(focus_top+dir+5)%5;}
+            if(nav_up){if(focus_area==FOCUS_ACTIONS){if(focus_action==1)focus_action=0;else focus_area=FOCUS_LIBRARY;}else if(focus_area==FOCUS_LIBRARY)focus_area=FOCUS_SORT;else if(focus_area==FOCUS_SORT)focus_area=FOCUS_TOP;}
+            if(nav_down){if(focus_area==FOCUS_TOP)focus_area=FOCUS_SORT;else if(focus_area==FOCUS_SORT)focus_area=FOCUS_LIBRARY;else if(focus_area==FOCUS_LIBRARY){if(selected<main_game_count())focus_area=FOCUS_ACTIONS;}else if(focus_area==FOCUS_ACTIONS){if(focus_action==0)focus_action=1;else focus_area=FOCUS_LIBRARY;}}
         }
-        if(down&HidNpadButton_B){if(steamgrid_open&&!steamgrid_task.running){if(steamgrid_step==5){steamgrid_clear_thumbs();steamgrid_step=3;steamgrid_count=steamgrid_game_count;steamgrid_cursor=0;}else if(steamgrid_step==3)steamgrid_step=1;else{steamgrid_open=0;steamgrid_clear_thumbs();}}else if(confirm_delete_open)confirm_delete_open=0;else if(info_open)info_open=0;else if(options_open)options_open=0;else if(sort_open)sort_open=0;else if(panel_open>=0)panel_open=-1;else if(library_open)library_open=0;}
+        if(down&HidNpadButton_B){if(steamgrid_open&&!steamgrid_task.running){if(steamgrid_step==5){steamgrid_clear_thumbs();steamgrid_step=3;steamgrid_count=steamgrid_game_count;steamgrid_cursor=0;}else if(steamgrid_step==3)steamgrid_step=1;else{steamgrid_open=0;steamgrid_clear_thumbs();}}else if(confirm_delete_open)confirm_delete_open=0;else if(info_open)info_open=0;else if(options_open&&personalization_open){personalization_open=0;option_cursor=2;}else if(options_open)options_open=0;else if(sort_open)sort_open=0;else if(panel_open==5&&settings_page>0)settings_page=0;else if(panel_open>=0)panel_open=-1;else if(library_open)library_open=0;}
         if(down&HidNpadButton_A){
             if(confirm_delete_open)delete_selected_game();
             else if(steamgrid_open&&!steamgrid_task.running){if(steamgrid_step==1)activate_steamgrid_menu();else if(steamgrid_step==3&&steamgrid_count>0)steamgrid_start_art();else if(steamgrid_step==5)steamgrid_start_download();}
             else if(info_open)info_open=0;
             else if(panel_open==2)nova_music_toggle_pause(menu_music);
             else if(panel_open==4)select_profile_index();
+            else if(panel_open==5)activate_settings_option();
             else if(sort_open){activate_sort_option();selection_changed=1;}
             else if(options_open)activate_game_option();
             else if(library_open&&panel_open<0){if(library_cursor>=0&&library_cursor<game_count)launch_game(&games[library_cursor]);}
             else if(panel_open>=0)panel_open=-1;
             else if(focus_area==FOCUS_TOP)activate_header((held&HidNpadButton_R)!=0);
             else if(focus_area==FOCUS_SORT){sort_open=1;sort_cursor=sort_mode;}
-            else if(focus_area==FOCUS_ACTIONS&&focus_action==1){options_open=1;option_cursor=0;}
+            else if(focus_area==FOCUS_ACTIONS&&focus_action==1){options_open=1;personalization_open=0;option_cursor=0;}
             else launch_selected();
         }
         HidTouchScreenState touch={0};hidGetTouchScreenStates(&touch,1);
             if(touch.count>0){int x=touch.touches[0].x,y=touch.touches[0].y;
             if(!touching){touching=1;dragging=0;tap_card=-1;
                 if(sort_open){if(x>=370&&x<=910&&y>=267&&y<387){sort_cursor=(y-267)/40;if(sort_cursor<0)sort_cursor=0;if(sort_cursor>2)sort_cursor=2;activate_sort_option();selection_changed=1;}else sort_open=0;}
+                else if(panel_open==5){if(settings_page==0&&x>=292&&x<=988&&y>=155&&y<545){settings_cursor=(y-155)/78;activate_settings_option();}else if(settings_page>0)settings_page=0;else panel_open=-1;}
                 else if(panel_open==4){if(x>=365&&x<=915&&y>=195&&y<195+profile_count*48){profile_cursor=(y-195)/48;select_profile_index();}else panel_open=-1;}
                 else if(steamgrid_open&&!steamgrid_task.running){if(steamgrid_step==1){bool pressed=false;const int xs[]={180,650,180,650,415},ys[]={185,185,315,315,445},ws[]={450,450,450,450,450},hs[]={100,100,100,100,76};for(int i=0;i<5;i++)if(x>=xs[i]&&x<=xs[i]+ws[i]&&y>=ys[i]&&y<ys[i]+hs[i]){steamgrid_menu_cursor=i;pressed=true;break;}if(pressed)activate_steamgrid_menu();}else if(steamgrid_step==3&&y>=145&&y<145+steamgrid_count*45){int row=(y-145)/45;if(row>=0&&row<steamgrid_count){steamgrid_cursor=row;steamgrid_start_art();}}else if(steamgrid_step==5&&y>=120&&y<540){int col=(x-150)/232,row=(y-126)/205,index=(steamgrid_cursor/6)*6+row*3+col;if(col>=0&&col<3&&row>=0&&row<2&&index<steamgrid_count)steamgrid_cursor=index;}}
                 else if(confirm_delete_open){if(x>=350&&x<=930&&y>=350&&y<395)delete_selected_game();else confirm_delete_open=0;}
                 else if(info_open)info_open=0;
-                else if(options_open){if(x>=322&&x<=958&&y>=151&&y<600){option_cursor=(y-151)/56;if(option_cursor<0)option_cursor=0;if(option_cursor>7)option_cursor=7;activate_game_option();}else options_open=0;}
+                else if(options_open){int option_count=personalization_open?4:6;if(x>=322&&x<=958&&y>=151&&y<151+option_count*56){option_cursor=(y-151)/56;if(option_cursor<0)option_cursor=0;if(option_cursor>=option_count)option_cursor=option_count-1;activate_game_option();}else options_open=0;}
                 else if(panel_open==2){SDL_Rect music_bounds={400,215,480,270};nova_music_handle_touch(menu_music,x,y,music_bounds);}
                 else if(library_open&&y>=126&&y<620&&x>=74&&x<1200){int col=(x-74)/226,row=(y-126)/244,index=(library_scroll_row+row)*5+col;if(col>=0&&col<5&&row>=0&&row<2&&index<game_count){library_cursor=index;update_library_scroll();}}
         else if(panel_open>=0)panel_open=-1;
                 else if(y<68&&x>990){focus_area=FOCUS_TOP;focus_top=1+(x-1008)/60;if(focus_top<1)focus_top=1;if(focus_top>4)focus_top=4;activate_header((held&HidNpadButton_R)!=0);}
                 else if(y<68&&x<340){focus_area=FOCUS_TOP;focus_top=0;activate_header((held&HidNpadButton_R)!=0);}
                 else if(y<115&&x<200){focus_area=FOCUS_SORT;sort_open=1;sort_cursor=sort_mode;}
-                else if(y>560&&x>670&&x<970){focus_area=FOCUS_ACTIONS;focus_action=x>815?1:0;if(focus_action){options_open=1;option_cursor=0;}else launch_selected();}
+                else if(y>560&&x>670&&x<970){if(selected>=main_game_count())launch_selected();else{focus_area=FOCUS_ACTIONS;focus_action=x>815?1:0;if(focus_action){options_open=1;personalization_open=0;option_cursor=0;}else launch_selected();}}
                 else if(y>140&&y<490){drag_start_x=x;drag_start_selected=selected;int count=carousel_count();for(int i=0;i<count;i++){if(abs(i-selected)>4)continue;if(abs(x-card_centers[i])<=card_widths[i]/2){tap_card=i;break;}}}
             } else if(panel_open==2&&y>=465&&y<=485){SDL_Rect music_bounds={400,215,480,270};nova_music_handle_touch(menu_music,x,y,music_bounds);}
             else if(tap_card>=0&&y>140&&y<490){int dx=drag_start_x-x;if(abs(dx)>12)dragging=1;if(dragging){heavy_load_suppressed=true;int next=drag_start_selected+(int)lroundf((float)dx/(SMALL_W+CARD_GAP));if(next<0)next=0;if(next>=carousel_count())next=carousel_count()-1;if(next!=selected){selected=next;selection_changed=1;focus_area=FOCUS_LIBRARY;}}}
@@ -596,7 +669,7 @@ int main(int argc,char *argv[]){
         }
         if(done_requested)done=1;
         if(selection_changed){icon_prefetch_center=selected;icon_prefetch_step=0;update_visible_icons(renderer);}
-        if(game_count&&!library_open&&selected<main_game_count()){float delta=(float)selected-carousel_position;carousel_position+=delta*0.24f;if(fabsf(delta)<0.025f)carousel_position=(float)selected;if(!heavy_load_suppressed&&fabsf((float)selected-carousel_position)<0.04f){query_playtime_for_game(&games[selected]);preload_selected_art_one(&games[selected]);}}
+        if(!library_open){float delta=(float)selected-carousel_position;carousel_position+=delta*0.24f;if(fabsf(delta)<0.025f)carousel_position=(float)selected;if(game_count&&selected<main_game_count()&&!heavy_load_suppressed&&fabsf((float)selected-carousel_position)<0.04f){query_playtime_for_game(&games[selected]);preload_selected_art_one(&games[selected]);}}
         if(library_open)prefetch_library_cover_one();else{prefetch_one_icon(renderer);prefetch_main_cover_one();}
         if(tick%60==0)update_system_status();
         nova_music_update(menu_music);

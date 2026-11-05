@@ -41,4 +41,8 @@ El resultado es `switch/NovaHome/NovaHome.nro`. Cópialo a `sd:/switch/NovaHome/
 
 El NRO funciona como aplicación homebrew independiente y usa los servicios de Switch disponibles para listar títulos instalados, abrir juegos y consultar información del sistema. Los cambios recientes amplían la navegación, reorganizan la pantalla principal y la Biblioteca, y permiten guardar arte SteamGridDB por juego. La conexión de red, la carga de imágenes descargadas y los nuevos cambios visuales deben validarse en la consola con cada versión compilada.
 
-La activación de NOVA como reemplazo del menú HOME y una herramienta separada para activarla/desactivarla todavía no están implementadas. `NovaHome.nro` no modifica Atmosphère, la NAND ni el HOME original.
+## NOVA Manager (prototipo nativo)
+
+Se agregó `switch/NovaManager/NOVAManager.nro`, una aplicación independiente de NOVA HOME con pantallas de Resumen, Archivos y Recuperación. Esta compilación simula la activación, desactivación y reinicio en memoria: no inspecciona ni escribe la SD, no modifica Atmosphère y no reemplaza el HOME. La integración real no está implementada.
+
+Compílalo con `powershell -ExecutionPolicy Bypass -File .\build-manager-nro.ps1`. El análisis técnico, la arquitectura propuesta y los requisitos de recuperación están en [docs/NOVA-MANAGER-ARCHITECTURE.md](docs/NOVA-MANAGER-ARCHITECTURE.md). La referencia HomeNX y la documentación de Atmosphère se usan para orientar el diseño; no se copió su implementación.
