@@ -1,49 +1,44 @@
 # NOVA HOME
 
-Prototipo visual para PC de una interfaz HOME inspirada en bibliotecas modernas de videojuegos. Está construido con HTML, CSS y JavaScript nativos, sin dependencias de compilación.
+NOVA HOME es una interfaz HOME nativa para Nintendo Switch con Atmosphère, empaquetada como una aplicación homebrew `.nro`. Este repositorio está centrado actualmente en el port de Switch. El proyecto aún no reemplaza el HOME original de la consola.
 
-## Ejecutar
+## Interfaz y navegación
 
-Instala Node.js 18 o posterior y ejecuta `node server.js` desde la carpeta del proyecto. Abre `http://127.0.0.1:8787` en el navegador. El servidor es necesario para el puente local de SteamGridDB, que evita el bloqueo CORS del navegador. La interfaz web se adapta a 1280 × 720 y 1920 × 1080.
+- El carrusel principal muestra hasta nueve juegos y termina con una tarjeta **Biblioteca**. Ya no se abre con `X`.
+- La Biblioteca presenta los juegos en una cuadrícula continua. Al bajar hasta la última fila visible, la cuadrícula se desplaza y muestra las siguientes filas; no hay páginas.
+- Las carátulas usan formato vertical de caja física y el título va centrado sobre la imagen. Los nombres del carrusel también se centran.
+- El panel inferior pone el logotipo del juego a la izquierda y, a la derecha, los botones `A Iniciar` y `+ Opciones`, seguidos por el tiempo de juego.
+- El orden se puede elegir entre título A–Z, tiempo de juego y último jugado. La selección se confirma desde el menú Ordenar y se conserva entre sesiones; por defecto usa último jugado.
+- D-pad y stick izquierdo navegan por la interfaz y los menús. En Biblioteca, el stick y el D-pad mueven la selección por filas. `A` abre juegos o Biblioteca; `+` muestra las opciones del juego seleccionado; `B` vuelve.
+- La pantalla táctil permite seleccionar y arrastrar el carrusel. La Biblioteca permite tocar directamente una carátula.
+- Perfil, hora, batería, controles, ajustes, música y Álbum están dentro de la pantalla principal. Mantener `R` al abrir Álbum solicita el visor original de capturas de la Switch.
 
-## Controles
+## Personalización con SteamGridDB
 
-- `←` / `→`: cambiar de juego.
-- `+`: abrir las opciones del juego.
-- `Enter`: iniciar la acción de demostración.
-- `Esc`: cerrar un diálogo; en la pantalla principal, abrir opciones.
-- Ratón: al pasar sobre una tarjeta, seleccionarla; el carrusel la resalta y amplía.
-- **Ordenar**: ordenar por última vez abierto, tiempo de juego o título de la A a la Z.
+Desde `+ Opciones` se pueden cambiar la carátula, el logotipo y el fondo del juego. Las mismas opciones están disponibles sobre un juego dentro de Biblioteca. La aplicación mantiene la selección ligada al ID del juego durante toda la búsqueda y descarga, guarda el archivo en la SD y lo vuelve a cargar para ese mismo juego; si se personaliza desde Biblioteca, el fondo y el logotipo se verán al seleccionar el título en el carrusel.
 
-También se puede navegar con el ratón y los botones visibles.
+El flujo muestra resultados de búsqueda, categorías, miniaturas y una vista previa antes de aplicar la imagen. También permite buscar un nombre manualmente, borrar el arte aplicado, restaurar la apariencia original y borrar o cambiar la clave API. La opción de icono personalizado se quitó porque SteamGridDB estaba reemplazando la carátula en lugar de cambiar el icono esperado; NOVA conserva los iconos oficiales que proporciona el sistema.
 
-Sobre el fondo del juego, la pantalla HOME reúne Perfil, reloj y batería en un recuadro a la izquierda, y accesos de icono a Mandos, Ajustes, Música y Álbum / Homebrew a la derecha. No muestra un título de NOVA HOME en la parte superior. En PC, estos paneles son demostrativos: no consultan los Joy-Con ni las aplicaciones instaladas en una Switch.
+La clave se guarda solo en `sd:/switch/NovaHome/steamgriddb.key`; no está incluida en el código ni en GitHub. Las imágenes personalizadas se guardan asociadas al ID del juego en `sd:/switch/NovaHome/art/`, y las miniaturas en `sd:/switch/NovaHome/cache/`. Las consultas HTTPS y descargas se ejecutan en una tarea aparte para mantener la interfaz activa. Hay validación de tipo y tamaño de imagen, reintentos ante algunos errores de red y reemplazo seguro del archivo existente.
 
-## Estructura
+## Música y fuente
 
-- `index.html`: estructura de la interfaz.
-- `styles.css`: tema, componentes, animaciones y adaptación de pantalla.
-- `app.js`: biblioteca de demostración, renderizado, navegación, diálogos, reproducción de música y persistencia de arte.
-- `switch/NovaHome`: app nativa SDL2/libnx para Atmosphère con biblioteca real, navegación con stick/D-pad, carrusel finito, música MP3 y el logo como icono de Homebrew.
-- `build-nro.ps1`: compila el NRO desde Windows sin fallar por espacios en la ruta.
-- `server.js`: servidor local estático y puente limitado para solicitudes a SteamGridDB.
-- `.github/workflows/build-switch.yml`: genera un artefacto `.nro` con devkitPro al actualizar el port nativo.
+El menú Música reproduce aleatoriamente al iniciar una de las canciones MP3 empaquetadas desde `Songs/`. Desde su panel se puede pausar, cambiar de pista y ajustar el volumen. La música se limita al menú y se detiene al iniciar un juego. Para añadir más pistas, coloca los archivos `.mp3` en `Songs/` y vuelve a compilar.
 
-## Estado del port de Switch
+La interfaz usa Manrope: Semibold 600 para nombres de juegos, Medium 500 para títulos y menús, Regular 400 para texto descriptivo y Bold 700 para opciones seleccionadas. El logotipo de NOVA se usa como icono de la aplicación en Homebrew y no se dibuja sobre la pantalla principal.
 
-El NRO compila localmente. La versión probada anteriormente en Switch ya leía las aplicaciones instaladas y sus iconos, consultaba el perfil, la hora, la batería y las estadísticas disponibles, e iniciaba juegos. Este avance añade navegación por stick, carrusel finito y música MP3 nativa; la última compilación debe probarse en consola. El logo de NOVA queda como icono de la aplicación en Homebrew y no se dibuja en la pantalla principal.
+## Compilar e instalar
 
-En Switch, Música reproduce los MP3 de `Songs/`, permite elegir pista, pausar y cambiar el volumen. Al compilar, Makefile los copia a RomFS. En PC, Ajustes permite guardar una clave de SteamGridDB solo en el navegador, probarla, buscar el juego y elegir carátula, fondo o icono. La clave no se incluye en el repositorio. SteamGridDB está conectado al prototipo PC; el NRO sigue usando los iconos oficiales instalados.
+Requiere devkitPro con `devkitA64`, `libnx`, `switch-sdl2`, `switch-sdl2_gfx`, `switch-sdl2_image`, `switch-sdl2_ttf` y `switch-sdl2_mixer`. En PowerShell, desde la carpeta del repositorio:
 
-Para SteamGridDB, crea una cuenta y genera una API key en [las preferencias de SteamGridDB](https://www.steamgriddb.com/profile/preferences/api). Pégala en Ajustes dentro de NOVA. La conexión requiere ejecutar `server.js`; abrir `index.html` directamente no permite usar el puente por las restricciones de origen del navegador.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-nro.ps1
+```
 
-### Próximas mejoras
+El resultado es `switch/NovaHome/NovaHome.nro`. Cópialo a `sd:/switch/NovaHome/NovaHome.nro` y ejecútalo desde el Homebrew Menu. El script compila desde una copia temporal para admitir rutas de Windows con espacios; los MP3 de `Songs/` y los pesos de Manrope se copian a RomFS durante la compilación.
 
-- Completar la navegación de todos los menús y controles.
-- Guardar la preferencia de orden de la biblioteca entre sesiones.
-- Integrar SteamGridDB con el port nativo si la experiencia de consola lo requiere.
-- Completar los menús de controles, ajustes, música y Álbum/Homebrew.
+## Estado y alcance
 
-## Alcance de activación
+El NRO funciona como aplicación homebrew independiente y usa los servicios de Switch disponibles para listar títulos instalados, abrir juegos y consultar información del sistema. Los cambios recientes amplían la navegación, reorganizan la pantalla principal y la Biblioteca, y permiten guardar arte SteamGridDB por juego. La conexión de red, la carga de imágenes descargadas y los nuevos cambios visuales deben validarse en la consola con cada versión compilada.
 
-`NovaHome.nro` se ejecuta como una aplicación homebrew independiente. `NovaToggle.nro` y el reemplazo del menú HOME aún no están implementados; son una etapa posterior separada que requiere diseñar y validar la integración con Atmosphère y su recuperación. Este NRO no modifica los archivos de Atmosphère ni reemplaza `qlaunch`.
+La activación de NOVA como reemplazo del menú HOME y una herramienta separada para activarla/desactivarla todavía no están implementadas. `NovaHome.nro` no modifica Atmosphère, la NAND ni el HOME original.

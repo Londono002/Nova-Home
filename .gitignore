@@ -7,3 +7,7 @@ switch/NovaHome/*.nacp
 switch/NovaHome/*.map
 switch/NovaHome/*.lst
 switch/NovaHome/build/
+switch/NovaHome/romfs/fonts/*.ttf
+switch/NovaHome/steamgriddb.key
+switch/NovaHome/art/
+switch/NovaHome/cache/

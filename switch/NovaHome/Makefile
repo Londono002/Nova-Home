@@ -62,7 +62,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lSDL2_image -lSDL2_gfx `sdl2-config --libs` -lpng16 -ljpeg -lwebp -lz `$(PREFIX)pkg-config --static --libs SDL2_mixer` -lnx -lm
+LIBS	:= -lSDL2_image -lSDL2_gfx `sdl2-config --libs` `$(PREFIX)pkg-config --static --libs SDL2_ttf` -lpng16 -ljpeg -lwebp -lz `$(PREFIX)pkg-config --static --libs SDL2_mixer` -lnx -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -158,7 +158,7 @@ ifneq ($(ROMFS),)
 	export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: $(BUILD) clean all prepare-songs
+.PHONY: $(BUILD) clean all prepare-songs prepare-fonts
 
 #---------------------------------------------------------------------------------
 all: $(BUILD)
@@ -167,7 +167,12 @@ prepare-songs:
 	@mkdir -p romfs/songs
 	@cp -f ../../Songs/*.mp3 romfs/songs/ 2>/dev/null || true
 
-$(BUILD): prepare-songs
+prepare-fonts:
+	@mkdir -p romfs/fonts
+	@cp -f $(FONT_SOURCE_DIR)/Manrope-Regular.ttf $(FONT_SOURCE_DIR)/Manrope-Medium.ttf $(FONT_SOURCE_DIR)/Manrope-SemiBold.ttf $(FONT_SOURCE_DIR)/Manrope-Bold.ttf romfs/fonts/
+
+FONT_SOURCE_DIR ?= ../../fonts/Manrope/static
+$(BUILD): prepare-songs prepare-fonts
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 

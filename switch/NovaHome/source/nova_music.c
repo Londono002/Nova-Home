@@ -1,4 +1,5 @@
 #include "nova_music.h"
+#include "nova_ui.h"
 
 #include <SDL_mixer.h>
 #include <SDL2_gfxPrimitives.h>
@@ -7,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <switch.h>
 
 #define NOVA_MUSIC_DIRECTORY "romfs:/songs"
 #define NOVA_MUSIC_VOLUME_DEFAULT 35
@@ -129,7 +131,10 @@ NovaMusic *nova_music_create(void) {
     music->ready = true;
 
     scan_playlist(music);
-    if (music->track_count > 0) start_track(music, 0);
+    if (music->track_count > 0) {
+        const size_t start=(size_t)(randomGet64()%music->track_count);
+        start_track(music, start);
+    }
     return music;
 }
 
@@ -208,27 +213,34 @@ const char *nova_music_track_title(const NovaMusic *music) {
     return music->tracks[music->current_track].title;
 }
 
-static void draw_text_ascii(SDL_Renderer *renderer, int x, int y, const char *text, SDL_Color c) {
-    char ascii[96];
-    size_t out = 0;
-    for (size_t i = 0; text[i] && out + 1 < sizeof(ascii); i++) {
-        const unsigned char ch = (unsigned char)text[i];
-        if (ch < 128) ascii[out++] = (char)ch;
-        else if ((ch & 0xC0) != 0x80) ascii[out++] = '?';
-    }
-    ascii[out] = '\0';
-    stringRGBA(renderer, x, y, ascii, c.r, c.g, c.b, c.a);
-}
-
 void nova_music_draw_panel(const NovaMusic *music, SDL_Renderer *renderer, SDL_Rect bounds) {
     if (!renderer) return;
     const int x = bounds.x, y = bounds.y, w = bounds.w, h = bounds.h;
-    roundedBoxRGBA(renderer, x, y, x+w, y+h, 15, 14, 16, 25, 247);
-    roundedRectangleRGBA(renderer, x, y, x+w, y+h, 15, 171, 151, 255, 255);
-    stringRGBA(renderer, x+28, y+24, "MUSICA DEL MENU", 205, 190, 255, 255);
+    roundedBoxRGBA(renderer, x, y, x+w, y+h, 18, 14, 16, 25, 250);
+    roundedRectangleRGBA(renderer, x, y, x+w, y+h, 18, 89, 76, 139, 255);
+    roundedBoxRGBA(renderer, x+1, y+1, x+w-1, y+48, 17, 91, 73, 152, 52);
+    nova_ui_draw_text(renderer, x+24, y+17, "NOVA  /  AUDIO DEL MENÚ", (SDL_Color){207,197,255,255}, NOVA_FONT_MEDIUM, 13);
+    const size_t total = nova_music_track_count(music);
+    if (total) {
+        char count[32];
+        snprintf(count, sizeof(count), "%02u  /  %02u", (unsigned)(music->current_track+1), (unsigned)total);
+        nova_ui_draw_text(renderer, x+w-105, y+17, count, (SDL_Color){181,173,205,255}, NOVA_FONT_MEDIUM, 13);
+    }
+
+    const int disc_x=x+68, disc_y=y+107;
+    filledCircleRGBA(renderer,disc_x,disc_y,43,33,29,52,255);
+    circleRGBA(renderer,disc_x,disc_y,40,138,119,208,255);
+    circleRGBA(renderer,disc_x,disc_y,32,76,65,113,255);
+    circleRGBA(renderer,disc_x,disc_y,24,56,48,87,255);
+    filledCircleRGBA(renderer,disc_x,disc_y,11,160,139,239,255);
+    filledCircleRGBA(renderer,disc_x,disc_y,3,35,30,53,255);
+    for(int i=0;i<7;i++){
+        int bar_h=5+(i*11+(int)(SDL_GetTicks()/90)%13)%17;
+        roundedBoxRGBA(renderer,x+137+i*8,y+111-bar_h/2,x+141+i*8,y+111+bar_h/2,2,145,125,227,210);
+    }
 
     const char *title = nova_music_track_title(music);
-    draw_text_ascii(renderer, x+28, y+66, title, (SDL_Color){255,255,255,255});
+    nova_ui_draw_text_fit(renderer, x+137, y+126, title, (SDL_Color){255,255,255,255}, NOVA_FONT_SEMIBOLD, 16, w-162);
 
     const char *status = "AUDIO NO DISPONIBLE";
     if (music && music->ready) {
@@ -237,28 +249,28 @@ void nova_music_draw_panel(const NovaMusic *music, SDL_Renderer *renderer, SDL_R
         else if (music->current_music && Mix_PlayingMusic()) status = "REPRODUCIENDO";
         else status = "LISTA";
     }
-    stringRGBA(renderer, x+28, y+88, status, 176, 178, 194, 255);
+    roundedBoxRGBA(renderer,x+137,y+151,x+137+(int)strlen(status)*6+18,y+174,9,128,101,245,48);
+    nova_ui_draw_text(renderer, x+146, y+156, status, (SDL_Color){196,188,220,255}, NOVA_FONT_MEDIUM, 13);
 
-    const int cy = y+132;
-    roundedBoxRGBA(renderer, x+w/2-112, cy, x+w/2-60, cy+38, 9, 255,255,255,24);
-    roundedBoxRGBA(renderer, x+w/2-44, cy, x+w/2+44, cy+38, 9, 128,101,245,255);
-    roundedBoxRGBA(renderer, x+w/2+60, cy, x+w/2+112, cy+38, 9, 255,255,255,24);
-    stringRGBA(renderer, x+w/2-98, cy+14, "|<", 255,255,255,255);
-    stringRGBA(renderer, x+w/2-22, cy+14, music && music->paused ? ">" : "||", 255,255,255,255);
-    stringRGBA(renderer, x+w/2+75, cy+14, ">|", 255,255,255,255);
+    const int cy = y+187;
+    roundedBoxRGBA(renderer, x+w/2-96, cy, x+w/2-48, cy+38, 12, 255,255,255,18);
+    roundedBoxRGBA(renderer, x+w/2-38, cy-4, x+w/2+38, cy+42, 16, 128,101,245,255);
+    roundedBoxRGBA(renderer, x+w/2+48, cy, x+w/2+96, cy+38, 12, 255,255,255,18);
+    nova_ui_draw_text(renderer, x+w/2-82, cy+13, "|<", (SDL_Color){241,238,255,255}, NOVA_FONT_BOLD, 13);
+    nova_ui_draw_text(renderer, x+w/2-13, cy+12, music && music->paused ? ">" : "Ⅱ", (SDL_Color){255,255,255,255}, NOVA_FONT_BOLD, 13);
+    nova_ui_draw_text(renderer, x+w/2+64, cy+13, ">|", (SDL_Color){241,238,255,255}, NOVA_FONT_BOLD, 13);
 
-    stringRGBA(renderer, x+28, y+189, "VOLUMEN", 178,180,195,255);
+    nova_ui_draw_text(renderer, x+25, y+239, "VOLUMEN", (SDL_Color){168,165,187,255}, NOVA_FONT_MEDIUM, 13);
     if (music) {
         char percent[12];
         snprintf(percent, sizeof(percent), "%d%%", music->volume);
-        stringRGBA(renderer, x+w-62, y+189, percent, 202,190,255,255);
+        nova_ui_draw_text(renderer, x+w-62, y+239, percent, (SDL_Color){214,203,255,255}, NOVA_FONT_SEMIBOLD, 13);
     }
-    const int slider_x = x+28, slider_w = w-56, slider_y = y+210;
-    boxRGBA(renderer, slider_x, slider_y, slider_x+slider_w, slider_y+7, 54,56,68,255);
+    const int slider_x = x+25, slider_w = w-50, slider_y = y+261;
+    roundedBoxRGBA(renderer, slider_x, slider_y, slider_x+slider_w, slider_y+6, 3, 54,56,68,255);
     const int volume = music ? music->volume : 0;
-    boxRGBA(renderer, slider_x, slider_y, slider_x+slider_w*volume/100, slider_y+7, 173,151,255,255);
-    filledCircleRGBA(renderer, slider_x+slider_w*volume/100, slider_y+3, 8, 238,231,255,255);
-    stringRGBA(renderer, x+28, y+h-24, "A PAUSAR   L/R CANCION   ARRIBA/ABAJO VOLUMEN", 185,185,199,255);
+    roundedBoxRGBA(renderer, slider_x, slider_y, slider_x+slider_w*volume/100, slider_y+6, 3, 173,151,255,255);
+    filledCircleRGBA(renderer, slider_x+slider_w*volume/100, slider_y+3, 7, 238,231,255,255);
 }
 
 bool nova_music_handle_touch(NovaMusic *music, int x, int y, SDL_Rect bounds) {
@@ -266,12 +278,12 @@ bool nova_music_handle_touch(NovaMusic *music, int x, int y, SDL_Rect bounds) {
         return false;
 
     const int local_x = x-bounds.x, local_y = y-bounds.y;
-    if (local_y >= 132 && local_y <= 170) {
-        if (local_x < bounds.w/2-60) nova_music_previous(music);
-        else if (local_x > bounds.w/2+60) nova_music_next(music);
+    if (local_y >= 183 && local_y <= 229) {
+        if (local_x < bounds.w/2-38) nova_music_previous(music);
+        else if (local_x > bounds.w/2+38) nova_music_next(music);
         else nova_music_toggle_pause(music);
-    } else if (local_y >= 198 && local_y <= 230) {
-        int percent=(local_x-28)*100/(bounds.w-56);
+    } else if (local_y >= 250 && local_y <= 270) {
+        int percent=(local_x-25)*100/(bounds.w-50);
         nova_music_set_volume(music,percent);
     }
     return true;

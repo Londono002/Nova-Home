@@ -17,15 +17,19 @@ New-Item -ItemType Directory -Path $buildDir | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $buildDir 'tmp') | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'switch\NovaHome') -Destination $novaDir -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Songs') -Destination $buildDir -Recurse
+Copy-Item -LiteralPath (Join-Path $projectRoot 'fonts') -Destination $buildDir -Recurse
+$romfsSongs = Join-Path $novaDir 'romfs\songs'
+New-Item -ItemType Directory -Path $romfsSongs -Force | Out-Null
+Copy-Item -Path (Join-Path $projectRoot 'Songs\*.mp3') -Destination $romfsSongs -Force
 $msysBuildDir = (& $cygpath -u $novaDir).Trim()
 $msysTempDir = (& $cygpath -u (Join-Path $buildDir 'tmp')).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $msysBuildDir -or -not $msysTempDir) { throw 'No se pudo convertir la ruta de compilación para MSYS2.' }
 
 $escapedBuildDir = $msysBuildDir.Replace("'", "'\''")
 $escapedTempDir = $msysTempDir.Replace("'", "'\''")
-$command = "export DEVKITPRO=/c/devkitPro DEVKITA64=/c/devkitPro/devkitA64 PATH=/c/devkitPro/portlibs/switch/bin:/c/devkitPro/devkitA64/bin:/c/devkitPro/tools/bin:/usr/bin:/bin TMPDIR='$escapedTempDir' TMP='$escapedTempDir' TEMP='$escapedTempDir'; make -C '$escapedBuildDir'"
+$command = "export DEVKITPRO=/c/devkitPro DEVKITA64=/c/devkitPro/devkitA64 PATH=/c/devkitPro/portlibs/switch/bin:/c/devkitPro/devkitA64/bin:/c/devkitPro/tools/bin:/usr/bin:/bin TMPDIR='$escapedTempDir' TMP='$escapedTempDir' TEMP='$escapedTempDir'; make -C '$escapedBuildDir' FONT_SOURCE_DIR=../fonts/Manrope/static"
 & $bash -lc $command
-if ($LASTEXITCODE -ne 0) { throw "Falló la compilación del NRO (código $LASTEXITCODE). Revisa que switch-sdl2, switch-sdl2_gfx, switch-sdl2_image y switch-sdl2_mixer estén instalados." }
+if ($LASTEXITCODE -ne 0) { throw "Falló la compilación del NRO (código $LASTEXITCODE). Revisa que switch-sdl2, switch-sdl2_gfx, switch-sdl2_image, switch-sdl2_ttf y switch-sdl2_mixer estén instalados." }
 
 $builtNro = Join-Path $novaDir 'NovaHome.nro'
 if (-not (Test-Path -LiteralPath $builtNro)) { throw 'La compilación terminó sin producir NovaHome.nro.' }
